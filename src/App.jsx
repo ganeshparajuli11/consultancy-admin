@@ -59,7 +59,7 @@ function App() {
       <Toaster position="top-right" />
 
       <Router>
-        <SessionLoader />
+        {/* <SessionLoader /> */}
 
         <Routes>
           {/* Public */}
