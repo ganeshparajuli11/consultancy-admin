@@ -1,0 +1,85 @@
+// src/App.jsx
+import React, { useEffect } from 'react'
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate
+} from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import api from './api/axios'
+
+// pages & layouts
+import AdminLayout from './layouts/AdminLayout'
+import Login       from './features/auth/Login'
+import Dashboard   from './features/admin/dashboard/Dashboard'
+import Users       from './features/user/pages/Users'
+import Tutors      from './features/tutor/pages/Tutors'
+import NotFound from './pages/NotFound'
+import Language from './features/languages/Language'
+
+
+/**
+ * SessionLoader runs inside Router context and handles
+ * token restoration + refresh logic on app startup.
+ */
+function SessionLoader() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken')
+
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+
+      api
+        .get('/auth/refresh', { withCredentials: true })
+        .then(res => {
+          const newToken = res.data.token
+          localStorage.setItem('accessToken', newToken)
+          api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+        })
+        .catch(() => {
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('user')
+          navigate('/admin/login', { replace: true })
+        })
+    } else {
+      navigate('/admin/login', { replace: true })
+    }
+  }, [navigate])
+
+  return null
+}
+
+function App() {
+  return (
+    <>
+      <Toaster position="top-right" />
+
+      <Router>
+        <SessionLoader />
+
+        <Routes>
+          {/* Public */}
+          <Route path="/admin/login" element={<Login />} />
+
+          {/* Protected Admin Routes */}
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/dashboard" element={<Dashboard />} />
+            <Route path="/admin/users"     element={<Users     />} />
+            <Route path="/admin/tutors"    element={<Tutors    />} />
+            <Route path="/admin/languages"    element={<Language    />} />
+            {/* …other admin pages… */}
+          </Route>
+
+          {/* 404 Fallback */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </>
+  )
+}
+
+export default App
