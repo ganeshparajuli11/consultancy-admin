@@ -9,7 +9,6 @@ import { Globe } from 'lucide-react'
 const API_ENDPOINTS = {
   languages: '/api/languages',
   levels: '/api/levels',
-  users: '/api/users'
 }
 
 export default function Language() {
