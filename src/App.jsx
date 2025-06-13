@@ -58,26 +58,30 @@ function App() {
     <>
       <Toaster position="top-right" />
 
-      <Router>
-        {/* <SessionLoader /> */}
+       <Router>
+      <Routes>
 
-        <Routes>
-          {/* Public */}
-          <Route path="/admin/login" element={<Login />} />
 
-          {/* Protected Admin Routes */}
-          <Route element={<AdminLayout />}>
-            <Route path="/admin/dashboard" element={<Dashboard />} />
-            <Route path="/admin/users"     element={<Users     />} />
-            <Route path="/admin/tutors"    element={<Tutors    />} />
-            <Route path="/admin/languages"    element={<Language    />} />
-            {/* …other admin pages… */}
-          </Route>
+        <Route path="/" element={<Navigate to="/admin/login" replace />} />
 
-          {/* 404 Fallback */}
+        {/* Public */}
+        <Route path="/admin/login" element={<Login />} />
+
+        {/* Protected Admin Routes: any "/admin/…" path */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="users"     element={<Users     />} />
+          <Route path="tutors"    element={<Tutors    />} />
+          <Route path="languages" element={<Language  />} />
+          { /* everything else under /admin/* is a 404 */ }
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Router>
+        </Route>
+
+        {/* Finally: any other URL (that isn't "/" or "/admin/…" or "/admin/login") */}
+        <Route path="*" element={<Navigate to="/admin/login" replace />} />
+
+      </Routes>
+    </Router>
     </>
   )
 }
