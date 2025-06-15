@@ -18,6 +18,7 @@ import Users       from './features/user/pages/Users'
 import Tutors      from './features/tutor/pages/Tutors'
 import NotFound from './pages/NotFound'
 import Language from './features/languages/Language'
+import StaffManagement from './features/admin/dashboard/StaffManagement'
 
 
 /**
@@ -73,6 +74,8 @@ function App() {
           <Route path="users"     element={<Users     />} />
           <Route path="tutors"    element={<Tutors    />} />
           <Route path="languages" element={<Language  />} />
+          <Route path="Staff" element={<StaffManagement  />} />
+
           { /* everything else under /admin/* is a 404 */ }
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  Home, Users, UserCheck, Shield, DollarSign,
-  ClipboardList, BookOpen, Globe, Settings, Menu
+  Home,
+  Users,
+  UserCheck,
+  Shield,
+  DollarSign,
+  ClipboardList,
+  BookOpen,
+  Globe,
+  Settings,
+  Menu
 } from 'lucide-react';
 
 const Logo = () => (
@@ -12,15 +20,16 @@ const Logo = () => (
 );
 
 const navItems = [
-  { label: 'Dashboard',  to: '/admin/dashboard', icon: Home },
-  { label: 'Users',      to: '/admin/users',     icon: Users },
-  { label: 'Tutors',     to: '/admin/tutors',    icon: UserCheck },
-  { label: 'Admins',     to: '/admin/admins',    icon: Shield },
-  { label: 'Revenue',    to: '/admin/revenue',   icon: DollarSign },
-  { label: 'Enrollment', to: '/admin/enrollment',icon: ClipboardList },
-  { label: 'Classes',    to: '/admin/classes',   icon: BookOpen },
-  { label: 'Languages',  to: '/admin/languages', icon: Globe },
-  { label: 'Settings',   to: '/admin/settings',  icon: Settings },
+  { label: 'Dashboard', to: '/admin/dashboard', icon: Home },
+  { label: 'Users',     to: '/admin/users',     icon: Users },
+  { label: 'Staff',     to: '/admin/staff',     icon: Users },        // ← NEW
+  { label: 'Tutors',    to: '/admin/tutors',    icon: UserCheck },
+  { label: 'Admins',    to: '/admin/admins',    icon: Shield },
+  { label: 'Revenue',   to: '/admin/revenue',   icon: DollarSign },
+  { label: 'Enrollment',to: '/admin/enrollment',icon: ClipboardList },
+  { label: 'Classes',   to: '/admin/classes',   icon: BookOpen },
+  { label: 'Languages', to: '/admin/languages', icon: Globe },
+  { label: 'Settings',  to: '/admin/settings',  icon: Settings },
 ];
 
 export default function Sidebar() {
