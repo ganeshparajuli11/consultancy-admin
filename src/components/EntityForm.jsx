@@ -1,13 +1,17 @@
 // src/components/DynamicEntityForm.jsx
 import React, { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
+import api from "../api/axios"
+import DatePicker from "react-datepicker"
+import "react-datepicker/dist/react-datepicker.css"
 
 export default function DynamicEntityForm({
   schema,            // array of field configs
   defaultValues = {},// initial values object
   onSubmit,          // handler
   apiEndpoints = {}, // for fetching options
-  computedFields = {} // for auto-computed values
+  computedFields = {}, // for auto-computed values
+  onCancel // <-- add this prop
 }) {
   const [fetchedOptions, setFetchedOptions] = useState({})
   const [computedValues, setComputedValues] = useState({})
@@ -30,20 +34,33 @@ export default function DynamicEntityForm({
   useEffect(() => {
     const fetchOptions = async () => {
       setLoading(true)
+      // Get baseURL from axios instance
+      const baseURL = api.defaults.baseURL || ''
       const promises = schema
         .filter(field => field.type === 'select-fetch' || field.type === 'multiselect-fetch')
         .map(async field => {
           try {
-            const endpoint = field.fetchEndpoint || apiEndpoints[field.fetchKey]
+            let endpoint = field.fetchEndpoint || apiEndpoints[field.fetchKey]
             if (!endpoint) return null
+
+            // Prepend baseURL if endpoint is relative
+            if (endpoint.startsWith('/')) {
+              endpoint = baseURL.replace(/\/$/, '') + endpoint
+            }
 
             const response = await fetch(endpoint)
             const data = await response.json()
-            
+            // FIX: handle { data: [...] } API response
+            const items = Array.isArray(data)
+              ? data
+              : Array.isArray(data.data)
+                ? data.data
+                : []
+
             // Transform data based on field config
             const options = field.transformOptions 
-              ? field.transformOptions(data)
-              : data.map(item => ({
+              ? field.transformOptions(items)
+              : items.map(item => ({
                   value: item[field.valueKey || 'id'] || item.id,
                   label: item[field.labelKey || 'name'] || item.name
                 }))
@@ -216,141 +233,140 @@ export default function DynamicEntityForm({
           </div>
         )
 
-case 'file-or-url':
-  return (
-    <Controller
-      name={name}
-      control={control}
-      rules={rules}
-      render={({ field: { onChange, value } }) => {
-        const [inputType, setInputType] = useState(
-          value instanceof File ? 'file' : 'url'
-        );
-        const [preview, setPreview] = useState(
-          typeof value === 'string' ? value : null
-        );
-
-        // Auto-compute from `code` once you have 2 letters
-        useEffect(() => {
-          if (field.computedValue && !value && watchedValues.code?.length === 2) {
-            const computed = field.computedValue(watchedValues);
-            if (computed) {
-              onChange(computed);
-              setPreview(computed);
-            }
-          }
-        }, [watchedValues.code, field.computedValue]);
-
-        // Update preview on value change
-        useEffect(() => {
-          if (typeof value === 'string' && value) {
-            setPreview(value);
-          } else if (value instanceof File) {
-            const url = URL.createObjectURL(value);
-            setPreview(url);
-            return () => URL.revokeObjectURL(url);
-          }
-        }, [value]);
-
-        const handleInputTypeChange = (type) => {
-          setInputType(type);
-
-          if (type === 'url' && value instanceof File) {
-            // switch back to computed or blank if code invalid
-            const computed =
-              watchedValues.code?.length === 2 && field.computedValue
-                ? field.computedValue(watchedValues)
-                : '';
-            onChange(computed);
-            setPreview(computed || null);
-
-          } else if (type === 'file' && typeof value === 'string') {
-            // clear URL
-            onChange(null);
-            setPreview(null);
-          }
-        };
-
+      case 'file-or-url':
         return (
-          <div className="space-y-3">
-            {/* URL / File radio toggle */}
-            <div className="flex items-center space-x-4">
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  name={`${name}_input_type`}
-                  value="url"
-                  checked={inputType === 'url'}
-                  onChange={() => handleInputTypeChange('url')}
-                  className="h-4 w-4 text-indigo-600"
-                />
-                <span className="ml-2 text-sm">URL</span>
-              </label>
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  name={`${name}_input_type`}
-                  value="file"
-                  checked={inputType === 'file'}
-                  onChange={() => handleInputTypeChange('file')}
-                  className="h-4 w-4 text-indigo-600"
-                />
-                <span className="ml-2 text-sm">Upload File</span>
-              </label>
-            </div>
+          <Controller
+            name={name}
+            control={control}
+            rules={rules}
+            render={({ field: { onChange, value } }) => {
+              const [inputType, setInputType] = useState(
+                value instanceof File ? 'file' : 'url'
+              );
+              const [preview, setPreview] = useState(
+                typeof value === 'string' ? value : null
+              );
 
-            {/* URL input */}
-            {inputType === 'url' && (
-              <input
-                type="url"
-                value={typeof value === 'string' ? value : ''}
-                onChange={e => {
-                  const url = e.target.value;
-                  onChange(url);
-                  setPreview(url || null);
-                }}
-                placeholder={field.urlPlaceholder}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500"
-              />
-            )}
-
-            {/* File input */}
-            {inputType === 'file' && (
-              <input
-                type="file"
-                accept={field.accept}
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    onChange(file);
-                    const objUrl = URL.createObjectURL(file);
-                    setPreview(objUrl);
+              // Auto-compute from `code` once you have 2 letters
+              useEffect(() => {
+                if (field.computedValue && !value && watchedValues.code?.length === 2) {
+                  const computed = field.computedValue(watchedValues);
+                  if (computed) {
+                    onChange(computed);
+                    setPreview(computed);
                   }
-                }}
-                className="w-full text-sm text-gray-500 file:py-2 file:px-4 file:rounded file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-              />
-            )}
+                }
+              }, [watchedValues.code, field.computedValue]);
 
-            {/* Preview */}
-            {field.preview && preview && (
-              <div className="mt-2">
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="h-16 w-16 object-cover rounded border"
-                  onError={e => {
-                    e.currentTarget.style.display = 'none';
-                    setPreview(null);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        );
-      }}
-    />
-  )
+              // Update preview on value change
+              useEffect(() => {
+                if (typeof value === 'string' && value) {
+                  setPreview(value);
+                } else if (value instanceof File) {
+                  const url = URL.createObjectURL(value);
+                  setPreview(url);
+                  return () => URL.revokeObjectURL(url);
+                }
+              }, [value]);
 
+              const handleInputTypeChange = (type) => {
+                setInputType(type);
+
+                if (type === 'url' && value instanceof File) {
+                  // switch back to computed or blank if code invalid
+                  const computed =
+                    watchedValues.code?.length === 2 && field.computedValue
+                      ? field.computedValue(watchedValues)
+                      : '';
+                  onChange(computed);
+                  setPreview(computed || null);
+
+                } else if (type === 'file' && typeof value === 'string') {
+                  // clear URL
+                  onChange(null);
+                  setPreview(null);
+                }
+              };
+
+              return (
+                <div className="space-y-3">
+                  {/* URL / File radio toggle */}
+                  <div className="flex items-center space-x-4">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name={`${name}_input_type`}
+                        value="url"
+                        checked={inputType === 'url'}
+                        onChange={() => handleInputTypeChange('url')}
+                        className="h-4 w-4 text-indigo-600"
+                      />
+                      <span className="ml-2 text-sm">URL</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name={`${name}_input_type`}
+                        value="file"
+                        checked={inputType === 'file'}
+                        onChange={() => handleInputTypeChange('file')}
+                        className="h-4 w-4 text-indigo-600"
+                      />
+                      <span className="ml-2 text-sm">Upload File</span>
+                    </label>
+                  </div>
+
+                  {/* URL input */}
+                  {inputType === 'url' && (
+                    <input
+                      type="url"
+                      value={typeof value === 'string' ? value : ''}
+                      onChange={e => {
+                        const url = e.target.value;
+                        onChange(url);
+                        setPreview(url || null);
+                      }}
+                      placeholder={field.urlPlaceholder}
+                      className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500"
+                    />
+                  )}
+
+                  {/* File input */}
+                  {inputType === 'file' && (
+                    <input
+                      type="file"
+                      accept={field.accept}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          onChange(file);
+                          const objUrl = URL.createObjectURL(file);
+                          setPreview(objUrl);
+                        }
+                      }}
+                      className="w-full text-sm text-gray-500 file:py-2 file:px-4 file:rounded file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                  )}
+
+                  {/* Preview */}
+                  {field.preview && preview && (
+                    <div className="mt-2">
+                      <img
+                        src={preview}
+                        alt="Preview"
+                        className="h-16 w-16 object-cover rounded border"
+                        onError={e => {
+                          e.currentTarget.style.display = 'none';
+                          setPreview(null);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+          />
+        )
 
       case 'file':
         return (
@@ -445,6 +461,55 @@ case 'file-or-url':
           />
         )
 
+      case 'time-range':
+        // expects value: { start: Date, end: Date }
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium min-w-[80px]">Start Time</label>
+              <Controller
+                name={`${name}.start`}
+                control={control}
+                rules={rules.start || rules}
+                render={({ field: { onChange, value } }) => (
+                  <DatePicker
+                    selected={value ? new Date(value) : null}
+                    onChange={date => onChange(date)}
+                    showTimeSelect
+                    showTimeSelectOnly
+                    timeIntervals={15}
+                    timeCaption="Start"
+                    dateFormat="h:mm aa"
+                    placeholderText="Start time"
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                )}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium min-w-[80px]">End Time</label>
+              <Controller
+                name={`${name}.end`}
+                control={control}
+                rules={rules.end || rules}
+                render={({ field: { onChange, value } }) => (
+                  <DatePicker
+                    selected={value ? new Date(value) : null}
+                    onChange={date => onChange(date)}
+                    showTimeSelect
+                    showTimeSelectOnly
+                    timeIntervals={15}
+                    timeCaption="End"
+                    dateFormat="h:mm aa"
+                    placeholderText="End time"
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                )}
+              />
+            </div>
+          </div>
+        )
+
       default:
         // text, email, password, date, datetime-local, url, tel, etc.
         return (
@@ -510,10 +575,11 @@ case 'file-or-url':
         )
       })}
 
-      <div className="flex justify-end space-x-3 pt-6 border-t">
+      {/* Sticky button row */}
+      <div className="flex justify-end space-x-3 pt-6 border-t bg-white sticky bottom-0 left-0 z-10">
         <button
           type="button"
-          onClick={() => window.history.back()}
+          onClick={() => onCancel ? onCancel() : window.history.back()}
           className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           Cancel

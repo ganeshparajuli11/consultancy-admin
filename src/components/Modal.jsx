@@ -1,12 +1,11 @@
 // src/components/Modal.jsx
-import React from 'react'
+import React from 'react';
 
 export default function Modal({ isOpen, title, onClose, children }) {
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
-    // Backdrop – allows scrolling if modal is taller than viewport
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       {/* Modal panel */}
       <div
         className="
@@ -18,29 +17,27 @@ export default function Modal({ isOpen, title, onClose, children }) {
           shadow-lg
           w-full
           max-w-lg
-          mx-auto
-          my-8
-          max-h-[90vh]       /* cap at 90% of viewport height */
-          overflow-y-auto    /* scroll inside when content overflows */
-          p-6
+          max-h-[90vh]
+          overflow-hidden
         "
       >
-        {/* Header */}
-        <header className="flex justify-between items-center mb-4">
+        {/* Sticky Header */}
+        <header className="flex justify-between items-center px-6 py-4 border-b bg-white sticky top-0 z-10">
           <h2 className="text-xl font-semibold">{title}</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+            aria-label="Close"
           >
             ×
           </button>
         </header>
 
-        {/* Body */}
-        <div className="flex-grow">
+        {/* Scrollable Body */}
+        <div className="flex-grow overflow-y-auto px-6 py-4">
           {children}
         </div>
       </div>
     </div>
-  )
+  );
 }

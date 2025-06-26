@@ -6,6 +6,7 @@ import EntityForm from '../../components/EntityForm'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import EntityCard from '../../components/EntityCard'
 import { Globe } from 'lucide-react'
+
 const API_ENDPOINTS = {
   languages: '/api/languages',
   levels: '/api/levels',

@@ -30,6 +30,8 @@ const navItems = [
   { label: 'Classes',   to: '/admin/classes',   icon: BookOpen },
   { label: 'Languages', to: '/admin/languages', icon: Globe },
   { label: 'Settings',  to: '/admin/settings',  icon: Settings },
+  { label: 'Sections',  to: '/admin/sections',  icon: Settings },
+
 ];
 
 export default function Sidebar() {

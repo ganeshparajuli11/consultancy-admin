@@ -19,7 +19,7 @@ import Tutors      from './features/tutor/pages/Tutors'
 import NotFound from './pages/NotFound'
 import Language from './features/languages/Language'
 import StaffManagement from './features/admin/dashboard/StaffManagement'
-
+import Section  from './features/sections/Sections'
 
 /**
  * SessionLoader runs inside Router context and handles
@@ -75,6 +75,8 @@ function App() {
           <Route path="tutors"    element={<Tutors    />} />
           <Route path="languages" element={<Language  />} />
           <Route path="Staff" element={<StaffManagement  />} />
+          <Route path="Sections" element={<Section  />} />
+
 
           { /* everything else under /admin/* is a 404 */ }
           <Route path="*" element={<NotFound />} />
