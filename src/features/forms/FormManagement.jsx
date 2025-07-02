@@ -36,7 +36,6 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import DynamicFormBuilder from '../../components/DynamicFormBuilder';
 import api from '../../api/axios';
-import FormBuilder from '../../components/FormBuilder';
 
 const FormManagement = () => {
   const [currentView, setCurrentView] = useState('list'); // 'list', 'create', 'edit', 'submissions'
@@ -1096,18 +1095,30 @@ const FormManagement = () => {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <FormBuilder
-            initialData={isEditing ? editingForm : null}
-            onSubmit={(formData) => {
-              if (isEditing) {
-                handleUpdateForm(editingForm._id, formData);
-              } else {
-                handleCreateForm(formData);
-              }
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <DynamicFormBuilder
+            initialFields={isEditing ? editingForm?.fields || [] : []}
+            onChange={(formData) => {
+              // Auto-save or handle changes as needed
+              console.log('Form data changed:', formData);
             }}
-            onCancel={() => setCurrentView('list')}
-            languages={languages}
+            onPublish={(formData) => {
+              const saveData = {
+                name: formData.metadata?.title || formData.title || 'Untitled Form',
+                description: formData.metadata?.description || formData.description || '',
+                fields: formData.fields || [],
+                isActive: true,
+                category: formData.metadata?.category || 'Registration',
+                formType: 'application'
+              };
+              
+              if (isEditing) {
+                handleUpdateForm(editingForm._id, saveData);
+              } else {
+                handleCreateForm(saveData);
+              }
+              setCurrentView('list');
+            }}
           />
         </div>
       </div>

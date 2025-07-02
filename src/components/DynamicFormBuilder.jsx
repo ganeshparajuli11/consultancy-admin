@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Plus, 
   Trash2, 
-  ChevronUp, 
-  ChevronDown, 
+  Copy,
   Settings,
   Type,
   Mail,
@@ -17,14 +16,29 @@ import {
   GripVertical,
   Star,
   MapPin,
-  CreditCard,
   User,
-  Users,
   BookOpen,
   Award,
-  Briefcase
+  ToggleLeft,
+  Image,
+  Download,
+  Layout,
+  Users,
+  GraduationCap,
+  Clock,
+  CreditCard,
+  X,
+  Eye,
+  Send,
+  Share,
+  Edit3,
+  Save,
+  ArrowLeft
 } from 'lucide-react';
-import toastManager from '../utils/toastManager';
+// Note: Using basic alert/console for notifications since toastManager was removed
+// import toastManager from '../utils/toastManager';
+// import { exportToExcel, generateSampleData, FieldSelector } from '../utils/excelExport';
+import apiService from '../services/api';
 
 // Import @dnd-kit components
 import {
@@ -44,31 +58,163 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Enhanced field types for consultancy context
+// Simplified field types for consultancy
 const FIELD_TYPES = [
-  { value: 'text', label: 'Text Input', icon: Type, description: 'Single line text field' },
-  { value: 'email', label: 'Email', icon: Mail, description: 'Email address with validation' },
-  { value: 'tel', label: 'Phone', icon: Phone, description: 'Phone number input' },
-  { value: 'number', label: 'Number', icon: Hash, description: 'Numeric input only' },
-  { value: 'textarea', label: 'Text Area', icon: FileText, description: 'Multi-line text field' },
-  { value: 'select', label: 'Dropdown', icon: List, description: 'Single selection dropdown' },
-  { value: 'checkbox', label: 'Checkboxes', icon: CheckSquare, description: 'Multiple selection checkboxes' },
-  { value: 'radio', label: 'Radio Buttons', icon: CheckSquare, description: 'Single selection from options' },
-  { value: 'date', label: 'Date', icon: Calendar, description: 'Date picker' },
-  { value: 'url', label: 'Website URL', icon: Globe, description: 'URL input with validation' },
-  { value: 'rating', label: 'Rating Scale', icon: Star, description: '1-5 star rating scale' },
-  { value: 'address', label: 'Address', icon: MapPin, description: 'Full address input' },
-  { value: 'file', label: 'File Upload', icon: FileText, description: 'Document/image upload' },
-  { value: 'language-level', label: 'Language Level', icon: Award, description: 'Language proficiency level' },
-  { value: 'language-selection', label: 'Language Choice', icon: Globe, description: 'Select preferred language to learn' },
-  { value: 'education-level', label: 'Education Level', icon: BookOpen, description: 'Academic qualification level' },
-  { value: 'experience', label: 'Experience Years', icon: Briefcase, description: 'Years of experience input' }
+  { 
+    type: 'text', 
+    label: 'Name', 
+    icon: User, 
+    placeholder: 'Enter your name',
+    defaultLabel: 'Full Name',
+    category: 'basic'
+  },
+  { 
+    type: 'email', 
+    label: 'Email', 
+    icon: Mail, 
+    placeholder: 'your.email@example.com',
+    defaultLabel: 'Email Address',
+    category: 'contact'
+  },
+  { 
+    type: 'tel', 
+    label: 'Phone', 
+    icon: Phone, 
+    placeholder: '+977-9XXXXXXXXX',
+    defaultLabel: 'Phone Number',
+    category: 'contact'
+  },
+  { 
+    type: 'date', 
+    label: 'Date', 
+    icon: Calendar, 
+    placeholder: '',
+    defaultLabel: 'Date of Birth',
+    category: 'basic'
+  },
+  { 
+    type: 'number', 
+    label: 'Number', 
+    icon: Hash, 
+    placeholder: '0',
+    defaultLabel: 'Enter a number',
+    category: 'basic'
+  },
+  { 
+    type: 'textarea', 
+    label: 'Long Text', 
+    icon: FileText, 
+    placeholder: 'Enter detailed information',
+    defaultLabel: 'Additional Information',
+    category: 'basic'
+  },
+  { 
+    type: 'language-selection', 
+    label: 'Language Choice', 
+    icon: Globe, 
+    placeholder: '',
+    defaultLabel: 'Which language would you like to learn?',
+    category: 'consultancy'
+  },
+  { 
+    type: 'proficiency-level', 
+    label: 'Current Level', 
+    icon: Award, 
+    placeholder: '',
+    defaultLabel: 'Your current proficiency level',
+    category: 'consultancy'
+  },
+  { 
+    type: 'education-level', 
+    label: 'Education', 
+    icon: GraduationCap, 
+    placeholder: '',
+    defaultLabel: 'Highest Education Level',
+    category: 'consultancy'
+  },
+  { 
+    type: 'time-preference', 
+    label: 'Time Preference', 
+    icon: Clock, 
+    placeholder: '',
+    defaultLabel: 'Preferred Class Time',
+    category: 'consultancy'
+  },
+  { 
+    type: 'select', 
+    label: 'Multiple Choice', 
+    icon: CheckSquare, 
+    placeholder: '',
+    defaultLabel: 'Choose an option',
+    category: 'choice'
+  },
+  { 
+    type: 'checkbox', 
+    label: 'Multiple Select', 
+    icon: List, 
+    placeholder: '',
+    defaultLabel: 'Select all that apply',
+    category: 'choice'
+  },
+  { 
+    type: 'file', 
+    label: 'File Upload', 
+    icon: Image, 
+    placeholder: '',
+    defaultLabel: 'Upload Document/Photo',
+    category: 'documents'
+  }
 ];
 
-const DynamicFormBuilder = ({ initialFields = [], onChange }) => {
-  const [fields, setFields] = useState([]);
-  const [editingField, setEditingField] = useState(null);
-  const isInitialized = useRef(false);
+// Quick Form Templates - Super Simple
+const QUICK_TEMPLATES = [
+  {
+    id: 'student-registration',
+    name: '🎓 Student Registration',
+    description: 'For new student enrollments',
+    fields: ['text', 'email', 'tel', 'language-selection', 'proficiency-level', 'time-preference']
+  },
+  {
+    id: 'class-booking',
+    name: '📅 Class Booking',
+    description: 'Book specific classes or batches',
+    fields: ['text', 'email', 'tel', 'date', 'time-preference', 'select']
+  },
+  {
+    id: 'feedback-form',
+    name: '⭐ Feedback Survey',
+    description: 'Collect student feedback',
+    fields: ['text', 'email', 'select', 'checkbox', 'textarea']
+  },
+  {
+    id: 'contact-form',
+    name: '📞 Contact Form',
+    description: 'General inquiries',
+    fields: ['text', 'email', 'tel', 'textarea']
+  }
+];
+
+const DynamicFormBuilder = ({ initialFields = [], onChange, onBack }) => {
+  // Simplified state management
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    fields: [],
+    isPublished: false,
+    formUrl: '',
+    formId: null,
+    category: 'general',
+    language: null
+  });
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [activeField, setActiveField] = useState(null);
+  const [showFieldTypes, setShowFieldTypes] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedExportFields, setSelectedExportFields] = useState([]);
+  const [currentStep, setCurrentStep] = useState('setup'); // 'setup', 'build', 'preview', 'publish'
 
   // Set up sensors for drag and drop
   const sensors = useSensors(
@@ -82,761 +228,1307 @@ const DynamicFormBuilder = ({ initialFields = [], onChange }) => {
     })
   );
 
-  // Normalize initial fields with proper memoization
-  const normalizeFields = useCallback((fieldsToNormalize) => {
-    return fieldsToNormalize.map((field, index) => ({
-      id: field.id || `field_${Date.now()}_${index}`,
-      name: field.name || `field_${index + 1}`,
-      label: field.label || `Field ${index + 1}`,
-      type: field.type || 'text',
-      required: field.required || false,
-      placeholder: field.placeholder || '',
-      helpText: field.helpText || '',
-      order: field.order !== undefined ? field.order : index,
-      options: field.options || [],
-      validation: {
-        minLength: field.validation?.minLength || null,
-        maxLength: field.validation?.maxLength || null,
-        ...field.validation
-      }
-    }));
-  }, []);
-
-  // Simplified initialization - only run once when component mounts or initialFields change
-  useEffect(() => {
-    // Only initialize if we have initial fields and haven't initialized yet, 
-    // OR if initial fields changed (for editing existing forms)
-    if (initialFields.length > 0 && (!isInitialized.current || fields.length === 0)) {
-      const normalizedFields = normalizeFields(initialFields);
-      setFields(normalizedFields);
-      isInitialized.current = true;
-    } else if (initialFields.length === 0 && !isInitialized.current) {
-      // Initialize with empty array if no initial fields
-      setFields([]);
-      isInitialized.current = true;
-    }
-  }, [initialFields, normalizeFields]);
-
-  // Notify parent of changes with minimal debounce
-  useEffect(() => {
-    if (isInitialized.current && onChange) {
-      const timeoutId = setTimeout(() => {
-        onChange(fields);
-      }, 50);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [fields, onChange]);
-
-  // Get default options for specific field types
+  // Get default options for consultancy fields
   const getDefaultOptions = useCallback((fieldType) => {
     switch (fieldType) {
-      case 'language-level':
-        return [
-          { value: 'beginner', label: 'Beginner (A1)' },
-          { value: 'elementary', label: 'Elementary (A2)' },
-          { value: 'intermediate', label: 'Intermediate (B1)' },
-          { value: 'upper-intermediate', label: 'Upper Intermediate (B2)' },
-          { value: 'advanced', label: 'Advanced (C1)' },
-          { value: 'proficient', label: 'Proficient (C2)' }
-        ];
       case 'language-selection':
         return [
-          { value: 'english', label: 'English' },
-          { value: 'german', label: 'German' },
-          { value: 'french', label: 'French' },
-          { value: 'spanish', label: 'Spanish' },
-          { value: 'italian', label: 'Italian' },
-          { value: 'japanese', label: 'Japanese' },
-          { value: 'chinese', label: 'Chinese' },
-          { value: 'korean', label: 'Korean' },
-          { value: 'arabic', label: 'Arabic' },
-          { value: 'portuguese', label: 'Portuguese' },
-          { value: 'russian', label: 'Russian' },
-          { value: 'other', label: 'Other' }
+          { id: 'ielts', value: 'ielts', label: 'IELTS Preparation' },
+          { id: 'pte', value: 'pte', label: 'PTE Preparation' },
+          { id: 'german', value: 'german', label: 'German Language' },
+          { id: 'spanish', value: 'spanish', label: 'Spanish Language' },
+          { id: 'french', value: 'french', label: 'French Language' },
+          { id: 'japanese', value: 'japanese', label: 'Japanese Language' },
+          { id: 'other', value: 'other', label: 'Other Language' }
+        ];
+      case 'proficiency-level':
+        return [
+          { id: 'beginner', value: 'beginner', label: 'Beginner (A1)' },
+          { id: 'elementary', value: 'elementary', label: 'Elementary (A2)' },
+          { id: 'intermediate', value: 'intermediate', label: 'Intermediate (B1)' },
+          { id: 'upper-intermediate', value: 'upper-intermediate', label: 'Upper Intermediate (B2)' },
+          { id: 'advanced', value: 'advanced', label: 'Advanced (C1)' },
+          { id: 'proficient', value: 'proficient', label: 'Proficient (C2)' }
         ];
       case 'education-level':
         return [
-          { value: 'high-school', label: 'High School' },
-          { value: 'associate', label: 'Associate Degree' },
-          { value: 'bachelor', label: 'Bachelor\'s Degree' },
-          { value: 'master', label: 'Master\'s Degree' },
-          { value: 'phd', label: 'PhD/Doctorate' },
-          { value: 'other', label: 'Other' }
+          { id: 'slc', value: 'slc', label: 'SLC/SEE' },
+          { id: 'plus2', value: 'plus2', label: '+2/Intermediate' },
+          { id: 'bachelor', value: 'bachelor', label: "Bachelor's Degree" },
+          { id: 'master', value: 'master', label: "Master's Degree" },
+          { id: 'phd', value: 'phd', label: 'PhD/Doctorate' }
         ];
-      case 'rating':
+      case 'time-preference':
         return [
-          { value: '1', label: '1 - Poor' },
-          { value: '2', label: '2 - Fair' },
-          { value: '3', label: '3 - Good' },
-          { value: '4', label: '4 - Very Good' },
-          { value: '5', label: '5 - Excellent' }
-        ];
-      case 'select':
-      case 'radio':
-      case 'checkbox':
-        return [
-          { value: 'option1', label: 'Option 1' },
-          { value: 'option2', label: 'Option 2' }
+          { id: 'morning', value: 'morning', label: 'Morning (6:00 AM - 8:00 AM)' },
+          { id: 'day', value: 'day', label: 'Day (10:00 AM - 4:00 PM)' },
+          { id: 'evening', value: 'evening', label: 'Evening (4:00 PM - 8:00 PM)' },
+          { id: 'weekend', value: 'weekend', label: 'Weekend Only' },
+          { id: 'flexible', value: 'flexible', label: 'Flexible' }
         ];
       default:
         return [];
     }
   }, []);
 
-  // Add field with smart defaults
-  const addField = useCallback((type) => {
-    const fieldTypeInfo = FIELD_TYPES.find(ft => ft.value === type);
-    const newField = {
-      id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: `${type}_${fields.length + 1}`,
-      label: fieldTypeInfo?.label || `New ${type} Field`,
-      type: type,
-      required: false,
-      placeholder: getFieldPlaceholder(type),
-      helpText: '',
-      order: fields.length,
-      options: getDefaultOptions(type),
-      validation: {
-        minLength: null,
-        maxLength: null
-      }
+  // Create new field with smart defaults
+  const createNewField = useCallback((type, fieldData = {}) => {
+    const fieldType = FIELD_TYPES.find(ft => ft.type === type);
+    const defaultOptions = ['select', 'checkbox'].includes(type) 
+      ? fieldData.options || [{ id: 'opt1', value: 'option1', label: 'Option 1' }]
+      : getDefaultOptions(type);
+
+    return {
+      id: fieldData.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      label: fieldData.label || fieldType?.defaultLabel || 'Question',
+      placeholder: fieldData.placeholder || fieldType?.placeholder || '',
+      required: fieldData.required || false,
+      options: defaultOptions,
+      helpText: fieldData.helpText || '',
+      order: fieldData.order !== undefined ? fieldData.order : formData.fields.length,
+      ...fieldData
     };
-    
-    setFields(prev => [...prev, newField]);
-    setEditingField(newField.id);
-    
-    // Only show toast for specific field types or if explicitly requested
-    if (['file', 'rating', 'address', 'language-level', 'language-selection', 'education-level'].includes(type)) {
-      toastManager.success(`${fieldTypeInfo?.label} field added`);
+  }, [getDefaultOptions, formData.fields.length]);
+
+  // Load quick template
+  const loadQuickTemplate = useCallback((templateId) => {
+    const template = QUICK_TEMPLATES.find(t => t.id === templateId);
+    if (template) {
+      const templateFields = template.fields.map((fieldType, index) => 
+        createNewField(fieldType, { order: index })
+      );
+      
+      setFormData(prev => ({
+        ...prev,
+        title: template.name.replace(/[🎓📅⭐📞]/g, '').trim(),
+        description: template.description,
+        fields: templateFields
+      }));
+      
+      setCurrentStep('build');
+      alert(`${template.name} template loaded!`);
     }
-  }, [fields.length, getDefaultOptions]);
+  }, [createNewField]);
 
-  // Get smart placeholder for field types
-  const getFieldPlaceholder = (type) => {
-    const placeholders = {
-      'text': 'Enter text...',
-      'email': 'Enter email address...',
-      'tel': 'Enter phone number...',
-      'number': 'Enter number...',
-      'textarea': 'Enter detailed information...',
-      'url': 'https://example.com',
-      'address': 'Enter full address...',
-      'experience': 'Enter years of experience...',
-      'date': '',
-      'file': '',
-      'select': '',
-      'radio': '',
-      'checkbox': '',
-      'rating': '',
-      'language-level': '',
-      'language-selection': '',
-      'education-level': ''
-    };
-    return placeholders[type] || 'Enter value...';
-  };
+  // Update form data
+  const updateFormData = useCallback((updates) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+  }, []);
 
-  // Enhanced update field function - ensures proper re-rendering
+  // Add new field
+  const addField = useCallback((type) => {
+    const newField = createNewField(type);
+    setFormData(prev => ({
+      ...prev,
+      fields: [...prev.fields, newField]
+    }));
+    setActiveField(newField.id);
+    setShowFieldTypes(false);
+  }, [createNewField]);
+
+  // Update field
   const updateField = useCallback((fieldId, updates) => {
-    setFields(prevFields => {
-      const fieldIndex = prevFields.findIndex(field => field.id === fieldId);
-      if (fieldIndex === -1) {
-        console.warn('⚠️ Field not found:', fieldId);
-        return prevFields;
-      }
-      
-      const updatedFields = [...prevFields];
-      const currentField = updatedFields[fieldIndex];
-      
-      // Create completely new field object to ensure re-render
-      const updatedField = { 
-        ...currentField, 
-        ...updates,
-        validation: { 
-          ...currentField.validation, 
-          ...(updates.validation || {}) 
-        }
-      };
-      
-      updatedFields[fieldIndex] = updatedField;
-      return updatedFields;
-    });
+    setFormData(prev => ({
+      ...prev,
+      fields: prev.fields.map(field => 
+        field.id === fieldId ? { ...field, ...updates } : field
+      )
+    }));
   }, []);
 
-  // Delete field function
+  // Delete field
   const deleteField = useCallback((fieldId) => {
-    const fieldToDelete = fields.find(f => f.id === fieldId);
-    
-    setFields(prev => prev.filter(field => field.id !== fieldId));
-    setEditingField(null);
-    
-    // Show minimal feedback for deletion
-    toastManager.success('Field removed');
-  }, [fields]);
+    if (formData.fields.length === 1) {
+      alert('You need at least one field');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      fields: prev.fields.filter(field => field.id !== fieldId)
+    }));
+    setActiveField(null);
+  }, [formData.fields.length]);
 
-  // Move field function
-  const moveField = useCallback((fieldId, direction) => {
-    setFields(prevFields => {
-      const currentIndex = prevFields.findIndex(f => f.id === fieldId);
-      if (
-        (direction === 'up' && currentIndex === 0) ||
-        (direction === 'down' && currentIndex === prevFields.length - 1)
-      ) return prevFields;
+  // Save form to backend
+  const saveFormToBackend = useCallback(async (formDataToSave = formData) => {
+    try {
+      setIsSaving(true);
+      
+      const formPayload = {
+        title: formDataToSave.title,
+        description: formDataToSave.description,
+        fields: formDataToSave.fields,
+        category: formDataToSave.category || 'general',
+        language: formDataToSave.language,
+        isActive: true
+      };
 
-      const newFields = [...prevFields];
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-      
-      [newFields[currentIndex], newFields[targetIndex]] = 
-      [newFields[targetIndex], newFields[currentIndex]];
-      
-      // Update order
-      newFields.forEach((field, index) => {
-        field.order = index;
-      });
-      
-      return newFields;
-    });
+      let response;
+      if (formDataToSave.formId) {
+        // Update existing form
+        response = await apiService.updateForm(formDataToSave.formId, formPayload);
+      } else {
+        // Create new form
+        response = await apiService.createForm(formPayload);
+      }
+
+      if (response.success) {
+        const savedForm = response.data.form;
+        const formUrl = apiService.generateFormUrl(savedForm);
+        
+        setFormData(prev => ({
+          ...prev,
+          formId: savedForm._id,
+          formUrl: formUrl,
+          isPublished: true
+        }));
+
+        return {
+          success: true,
+          formId: savedForm._id,
+          formUrl: formUrl,
+          form: savedForm
+        };
+      } else {
+        throw new Error(response.message || 'Failed to save form');
+      }
+    } catch (error) {
+      console.error('Save form error:', error);
+      alert(`Failed to save form: ${error.message}`);
+      return { success: false, error: error.message };
+    } finally {
+      setIsSaving(false);
+    }
+  }, [formData]);
+
+  // Generate form URL
+  const generateFormUrl = useCallback((formData) => {
+    return apiService.generateFormUrl(formData);
   }, []);
 
-  // Drag end handler
+  // Handle publish
+  const handlePublish = useCallback(async () => {
+    if (!formData.title.trim()) {
+      alert('Please add a form title');
+      return;
+    }
+    
+    if (formData.fields.length === 0) {
+      alert('Please add at least one field');
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const result = await saveFormToBackend();
+      
+      if (result.success) {
+        setCurrentStep('publish');
+        alert('Form published successfully!');
+        
+        // Copy URL to clipboard
+        navigator.clipboard.writeText(result.formUrl).then(() => {
+          console.log('Form URL copied to clipboard!');
+        });
+      }
+    } catch (error) {
+      console.error('Publish error:', error);
+      alert('Failed to publish form. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [formData.title, formData.fields.length, saveFormToBackend]);
+
+  // Export handling (simplified since excelExport was removed)
+  const handleExportClick = useCallback(() => {
+    alert('Export functionality temporarily disabled. Feature will be restored soon.');
+    // setSelectedExportFields(formData.fields.map(field => field.id));
+    // setShowExportModal(true);
+  }, []);
+
+  const handleExport = useCallback(() => {
+    alert('Export feature coming soon!');
+    // const sampleResponses = generateSampleData(formData.fields, 25);
+    // exportToExcel(sampleResponses, selectedExportFields, formData.fields, formData);
+    setShowExportModal(false);
+  }, []);
+
+  // Notify parent of changes
+  useEffect(() => {
+    if (onChange) {
+      onChange(formData);
+    }
+  }, [formData, onChange]);
+
+  // Field IDs for drag and drop
+  const fieldIds = useMemo(() => formData.fields.map(field => field.id), [formData.fields]);
+
+  // Handle drag end
   const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
-
     if (active.id !== over?.id) {
-      setFields((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over?.id);
-        
-        const newFields = arrayMove(items, oldIndex, newIndex);
-        
-        // Update order
-        newFields.forEach((field, index) => {
-          field.order = index;
-        });
-        
-        return newFields;
+      setFormData(prev => {
+        const oldIndex = prev.fields.findIndex((item) => item.id === active.id);
+        const newIndex = prev.fields.findIndex((item) => item.id === over?.id);
+        const newFields = arrayMove(prev.fields, oldIndex, newIndex);
+        return {
+          ...prev,
+          fields: newFields.map((field, index) => ({ ...field, order: index }))
+        };
       });
     }
   }, []);
 
-  // Option management functions
-  const addOption = useCallback((fieldId) => {
-    setFields(prevFields => {
-      return prevFields.map(field => {
-        if (field.id === fieldId) {
-          const newOption = {
-            value: `option_${field.options.length + 1}`,
-            label: `Option ${field.options.length + 1}`
-          };
-          return {
-            ...field,
-            options: [...field.options, newOption]
-          };
-        }
-        return field;
-      });
-    });
-  }, []);
-
-  const updateOption = useCallback((fieldId, optionIndex, updates) => {
-    setFields(prevFields => {
-      return prevFields.map(field => {
-        if (field.id === fieldId) {
-          const updatedOptions = field.options.map((option, index) =>
-            index === optionIndex ? { ...option, ...updates } : option
-          );
-          return { ...field, options: updatedOptions };
-        }
-        return field;
-      });
-    });
-  }, []);
-
-  const deleteOption = useCallback((fieldId, optionIndex) => {
-    setFields(prevFields => {
-      return prevFields.map(field => {
-        if (field.id === fieldId) {
-          const updatedOptions = field.options.filter((_, index) => index !== optionIndex);
-          return { ...field, options: updatedOptions };
-        }
-        return field;
-      });
-    });
-  }, []);
-
-  // Sortable Field Component - Removed memo to allow updates
-  const SortableField = ({ field, index }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-    } = useSortable({ id: field.id });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-
-    const FieldTypeIcon = FIELD_TYPES.find(ft => ft.value === field.type)?.icon || Type;
-
-    return (
-      <div ref={setNodeRef} style={style} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div 
-              {...attributes} 
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded"
-              title="Drag to reorder"
-            >
-              <GripVertical className="w-5 h-5 text-gray-400" />
-            </div>
-            <FieldTypeIcon className="w-5 h-5 text-blue-600" />
-            <div>
-              <h4 className="font-medium text-gray-900">{field.label || 'Untitled Field'}</h4>
-              <p className="text-sm text-gray-500">
-                {FIELD_TYPES.find(ft => ft.value === field.type)?.label || field.type}
-                {field.required && ' • Required'}
-              </p>
-            </div>
+  return (
+    <div className="max-w-4xl mx-auto p-4 bg-gray-50 min-h-screen">
+      {/* Header with Steps */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </button>
+            )}
+            <h1 className="text-2xl font-bold text-gray-900">Create Your Form</h1>
           </div>
-          
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => moveField(field.id, 'up')}
-              disabled={index === 0}
-              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-              title="Move up"
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => moveField(field.id, 'down')}
-              disabled={index === fields.length - 1}
-              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-              title="Move down"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setEditingField(
-                editingField === field.id ? null : field.id
-              )}
-              className={`p-1 transition-colors rounded ${
-                editingField === field.id 
-                  ? 'text-blue-800 bg-blue-100' 
-                  : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
-              }`}
-              title="Edit field"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => deleteField(field.id)}
-              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
-              title="Delete field"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {['setup', 'build', 'preview', 'publish'].map((step, index) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep === step ? 'bg-blue-600 text-white' : 
+                  ['setup', 'build', 'preview'].indexOf(currentStep) > index ? 'bg-green-500 text-white' : 
+                  'bg-gray-200 text-gray-600'
+                }`}>
+                  {index + 1}
+                </div>
+                {index < 3 && <div className="w-8 h-0.5 bg-gray-300 mx-2" />}
+              </div>
+            ))}
           </div>
         </div>
-        
-        {editingField === field.id && (
-          <FieldEditor 
-            key={field.id}
-            field={field} 
-            updateField={updateField}
-            addOption={addOption}
-            updateOption={updateOption}
-            deleteOption={deleteOption}
-          />
+
+        {/* Step 1: Quick Setup */}
+        {currentStep === 'setup' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Let's Create Your Form! 🚀</h2>
+              <p className="text-gray-600">Choose a template or start fresh. Everything is merged in one easy flow.</p>
+            </div>
+
+            {/* Quick Start */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">📝 Quick Start (Recommended)</h3>
+              <div className="space-y-4">
+                <div>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => updateFormData({ title: e.target.value })}
+                    placeholder="Form Title (e.g., Student Registration Form)"
+                    className="w-full px-4 py-3 text-lg border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => updateFormData({ description: e.target.value })}
+                    placeholder="Brief description (optional)"
+                    rows={2}
+                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (formData.title.trim()) {
+                      setCurrentStep('build');
+                      alert('Form created! Now add your questions.');
+                    } else {
+                      alert('Please enter a form title first');
+                    }
+                  }}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold text-lg transition-colors"
+                >
+                  Create Form & Add Questions →
+                </button>
+              </div>
+            </div>
+
+            {/* Templates */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Or Choose a Template</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {QUICK_TEMPLATES.map(template => (
+                  <button
+                    key={template.id}
+                    onClick={() => loadQuickTemplate(template.id)}
+                    className="text-left p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all group"
+                  >
+                    <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-green-700">{template.name}</h4>
+                    <p className="text-sm text-gray-600">{template.description}</p>
+                    <div className="text-xs text-green-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to load with {template.fields.length} questions
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Title/Description for other steps */}
+        {currentStep !== 'setup' && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-lg">📝</span>
+                <span className="text-sm font-medium text-gray-600">Form Title & Info</span>
+              </div>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => updateFormData({ title: e.target.value })}
+                placeholder="Form Title"
+                className="text-xl font-bold border-none outline-none bg-transparent placeholder-gray-400 w-full mb-2 text-gray-900"
+              />
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) => updateFormData({ description: e.target.value })}
+                placeholder="Add a description (optional)"
+                className="text-gray-600 border-none outline-none bg-transparent placeholder-gray-400 w-full"
+              />
+            </div>
+          </div>
         )}
       </div>
-    );
-  };
 
-  // Field Editor Component - Properly reactive to field changes
-  const FieldEditor = React.memo(({ field, updateField, addOption, updateOption, deleteOption }) => {
-    // Local state for inputs to prevent focus loss
-    const [localValues, setLocalValues] = useState({
-      name: field.name || '',
-      label: field.label || '',
-      placeholder: field.placeholder || '',
-      helpText: field.helpText || '',
-      required: field.required || false
-    });
-
-    // Update local state when field prop changes (for external updates)
-    useEffect(() => {
-      setLocalValues({
-        name: field.name || '',
-        label: field.label || '',
-        placeholder: field.placeholder || '',
-        helpText: field.helpText || '',
-        required: field.required || false
-      });
-    }, [field.id]); // Only update when field ID changes (new field selected)
-
-    // Handle local state changes (only visual updates)
-    const handleLocalChange = useCallback((key, value) => {
-      setLocalValues(prev => ({ ...prev, [key]: value }));
-    }, []);
-
-    // Handle saving changes (on blur or Enter)
-    const handleSaveChange = useCallback((key, value) => {
-      updateField(field.id, { [key]: value });
-    }, [field.id, updateField]);
-
-    // Handle key press events
-    const handleKeyPress = useCallback((e, key, value) => {
-      if (e.key === 'Enter') {
-        e.target.blur(); // This will trigger onBlur
-      }
-    }, []);
-
-    // Handle immediate updates (like checkbox)
-    const handleImmediateUpdate = useCallback((key, value) => {
-      setLocalValues(prev => ({ ...prev, [key]: value }));
-      updateField(field.id, { [key]: value });
-    }, [field.id, updateField]);
-
-    const handleValidationUpdate = useCallback((validationKey, value) => {
-      updateField(field.id, {
-        validation: {
-          ...field.validation,
-          [validationKey]: value
-        }
-      });
-    }, [field.id, field.validation, updateField]);
-
-    return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
-        <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-          <Settings className="w-4 h-4 mr-2" />
-          Field Settings
-        </h4>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Basic Settings */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Field Name (Internal)
-            </label>
-            <input
-              type="text"
-              value={localValues.name}
-              onChange={(e) => handleLocalChange('name', e.target.value)}
-              onBlur={(e) => handleSaveChange('name', e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, 'name', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="field_name"
-            />
-            <p className="text-xs text-gray-500 mt-1">Used for form processing (no spaces)</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Label (User Visible) *
-            </label>
-            <input
-              type="text"
-              value={localValues.label}
-              onChange={(e) => handleLocalChange('label', e.target.value)}
-              onBlur={(e) => handleSaveChange('label', e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, 'label', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Field Label"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Placeholder
-            </label>
-            <input
-              type="text"
-              value={localValues.placeholder}
-              onChange={(e) => handleLocalChange('placeholder', e.target.value)}
-              onBlur={(e) => handleSaveChange('placeholder', e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, 'placeholder', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter placeholder..."
-            />
-          </div>
-
-          <div>
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={localValues.required}
-                onChange={(e) => handleImmediateUpdate('required', e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Required Field</span>
-            </label>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Help Text
-          </label>
-          <textarea
-            value={localValues.helpText}
-            onChange={(e) => handleLocalChange('helpText', e.target.value)}
-            onBlur={(e) => handleSaveChange('helpText', e.target.value)}
-            onKeyPress={(e) => handleKeyPress(e, 'helpText', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Optional help text for users..."
-            rows={2}
-          />
-        </div>
-
-        {/* Options for select/radio/checkbox fields */}
-        {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && 
-         !['language-level', 'language-selection', 'education-level', 'rating'].includes(field.type) && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Options
-              </label>
+      {/* Form Builder */}
+      {currentStep === 'build' && (
+        <div className="space-y-6">
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm">
+                        <div className="flex space-x-3">
               <button
-                onClick={() => addOption(field.id)}
-                className="text-blue-600 hover:text-blue-800 text-sm flex items-center font-medium hover:bg-blue-50 px-2 py-1 rounded"
+                onClick={async () => {
+                  if (formData.title.trim() && formData.fields.length > 0) {
+                    await saveFormToBackend();
+                  } else {
+                    alert('Please add a title and at least one field before saving');
+                  }
+                }}
+                disabled={isSaving || !formData.title.trim() || formData.fields.length === 0}
+                className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Option
+                <Save className="w-4 h-4 mr-2" />
+                {isSaving ? 'Saving...' : formData.formId ? 'Update Form' : 'Save Draft'}
+              </button>
+              <button
+                onClick={() => setCurrentStep('preview')}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                Preview Form
+              </button>
+              <button
+                onClick={handleExportClick}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                disabled={formData.fields.length === 0}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Data
               </button>
             </div>
-            <div className="space-y-2">
-              {(field.options || []).map((option, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={option.value || ''}
-                    onChange={(e) => updateOption(field.id, index, { value: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Value"
+            <div className="text-sm text-gray-600">
+              {formData.fields.length} questions • {formData.fields.filter(f => f.required).length} required
+            </div>
+          </div>
+
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={fieldIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-4">
+                {formData.fields.map((field, index) => (
+                  <FormField
+                    key={field.id}
+                    field={field}
+                    isActive={activeField === field.id}
+                    onActivate={() => setActiveField(field.id)}
+                    onUpdate={updateField}
+                    onDelete={deleteField}
                   />
-                  <input
-                    type="text"
-                    value={option.label || ''}
-                    onChange={(e) => updateOption(field.id, index, { label: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Label"
-                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+
+          {/* Add Question Button */}
+          <div className="mt-4 relative">
+            <button
+              onClick={() => setShowFieldTypes(!showFieldTypes)}
+              className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center group"
+            >
+              <Plus className="w-6 h-6 mr-2 text-gray-400 group-hover:text-blue-600" />
+              <span className="text-gray-600 group-hover:text-blue-600 font-medium">Add Question</span>
+            </button>
+            
+            {showFieldTypes && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Choose Question Type</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {FIELD_TYPES.map(fieldType => {
+                    const Icon = fieldType.icon;
+                    return (
+                      <button
+                        key={fieldType.type}
+                        onClick={() => addField(fieldType.type)}
+                        className="flex items-center p-3 hover:bg-gray-50 rounded-md transition-colors text-left border border-gray-100 hover:border-blue-300"
+                      >
+                        <Icon className="w-5 h-5 mr-3 text-blue-600" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{fieldType.label}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Preview Step */}
+      {currentStep === 'preview' && (
+        <div className="space-y-6">
+          {/* Preview Actions */}
+          <div className="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold text-gray-900">Form Preview</h2>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setCurrentStep('build')}
+                className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Edit Form
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={isLoading || isSaving}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isLoading ? 'Publishing...' : 'Publish Form'}
+              </button>
+            </div>
+          </div>
+
+          {/* Form Preview */}
+          <div className="bg-white rounded-lg shadow-sm p-8">
+            <div className="max-w-2xl">
+              <div className="mb-8">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">{formData.title}</h1>
+                {formData.description && (
+                  <p className="text-gray-600">{formData.description}</p>
+                )}
+              </div>
+              
+              <div className="space-y-6">
+                {formData.fields.map((field) => (
+                  <div key={field.id} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {field.label}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    <FormPreview field={field} />
+                    {field.helpText && (
+                      <p className="text-xs text-gray-500">{field.helpText}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish Step */}
+      {currentStep === 'publish' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Send className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Form Published Successfully! 🎉</h2>
+            <p className="text-gray-600 mb-6">Your form is now live and ready to collect responses.</p>
+            
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Form URL</label>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="text"
+                  value={formData.formUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700 text-sm"
+                />
+                <button
+                  onClick={() => navigator.clipboard.writeText(formData.formUrl)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={() => setCurrentStep('build')}
+                className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Edit Form
+              </button>
+              <button
+                onClick={handleExportClick}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Responses
+              </button>
+              <button
+                onClick={() => window.open(formData.formUrl, '_blank')}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Share className="w-4 h-4 mr-2" />
+                Open Form
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Export Form Responses</h2>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <div className="mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h3 className="text-blue-900 font-medium mb-2">📊 What You'll Get:</h3>
+                  <ul className="text-blue-800 text-sm space-y-1">
+                    <li>• CSV file with form responses (opens in Excel)</li>
+                    <li>• Sample data (25 responses) for demonstration</li>
+                    <li>• Only selected fields will be included</li>
+                    <li>• Properly formatted data with form metadata</li>
+                  </ul>
+                </div>
+                
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h3 className="text-yellow-900 font-medium mb-2">💡 For Nepal Consultancy:</h3>
+                  <p className="text-yellow-800 text-sm">
+                    Perfect for tracking student registrations, course preferences, and contact information. 
+                    Export only the fields you need for your specific analysis or student management.
+                  </p>
+                </div>
+              </div>
+
+              {/* FieldSelector component temporarily removed */}
+              <div className="text-center py-8">
+                <p className="text-gray-600 mb-4">Export functionality is being restored.</p>
+                <button
+                  onClick={handleExport}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Download Sample CSV
+                </button>
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Form Preview Component
+const FormPreview = ({ field }) => {
+  const renderPreview = () => {
+    switch (field.type) {
+      case 'textarea':
+        return (
+          <textarea
+            placeholder={field.placeholder}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none"
+            rows={3}
+            disabled
+          />
+        );
+        
+      case 'select':
+      case 'language-selection':
+      case 'proficiency-level':
+      case 'education-level':
+      case 'time-preference':
+        return (
+          <select className="w-full px-3 py-2 border border-gray-300 rounded-md" disabled>
+            <option>Choose an option...</option>
+            {(field.options || []).map((option) => (
+              <option key={option.id} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+        
+      case 'checkbox':
+        return (
+          <div className="space-y-2">
+            {(field.options || []).map((option) => (
+              <label key={option.id} className="flex items-center space-x-2">
+                <input type="checkbox" disabled className="text-blue-600" />
+                <span className="text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+        
+      case 'date':
+        return (
+          <input
+            type="date"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            disabled
+          />
+        );
+        
+      case 'file':
+        const getAcceptedTypes = (purpose) => {
+          switch (purpose) {
+            case 'photos':
+              return '.png,.jpg,.jpeg';
+            case 'documents':
+              return '.pdf,.doc,.docx';
+            case 'certificates':
+              return '.pdf,.jpg,.jpeg,.png';
+            case 'transcripts':
+              return '.pdf';
+            case 'cv':
+              return '.pdf,.doc,.docx';
+            case 'passport':
+              return '.jpg,.jpeg,.png,.pdf';
+            case 'test-scores':
+              return '.pdf,.jpg,.jpeg,.png';
+            default:
+              return '.pdf,.doc,.docx,.jpg,.jpeg,.png';
+          }
+        };
+
+        const getFileTypeDisplay = (purpose) => {
+          const types = {
+            'photos': 'PNG, JPG, JPEG',
+            'documents': 'PDF, DOC, DOCX',
+            'certificates': 'PDF, JPG, PNG',
+            'transcripts': 'PDF only',
+            'cv': 'PDF, DOC, DOCX',
+            'passport': 'JPG, PNG, PDF',
+            'test-scores': 'PDF, JPG, PNG',
+            'any': 'All file types'
+          };
+          return types[purpose] || 'PDF, DOC, JPG, PNG';
+        };
+
+        return (
+          <div className="space-y-3">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer">
+              <Image className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-600 font-medium mb-1">
+                {field.allowMultiple ? 'Choose files or drag & drop' : 'Choose file or drag & drop'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {getFileTypeDisplay(field.uploadPurpose)} up to {field.maxSize || '10'}MB
+              </p>
+              <input
+                type="file"
+                accept={getAcceptedTypes(field.uploadPurpose)}
+                multiple={field.allowMultiple}
+                className="hidden"
+                disabled
+              />
+            </div>
+            
+            {field.uploadInstructions && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  💡 {field.uploadInstructions}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+        
+      default:
+        return (
+          <input
+            type={field.type}
+            placeholder={field.placeholder}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            disabled
+          />
+        );
+    }
+  };
+
+  return renderPreview();
+};
+
+// Simplified Form Field Component
+const FormField = ({ field, isActive, onActivate, onUpdate, onDelete }) => {
+  const [localLabel, setLocalLabel] = useState(field.label);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showFieldTypeMenu, setShowFieldTypeMenu] = useState(false);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: field.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  // Update local label when field changes
+  useEffect(() => {
+    setLocalLabel(field.label);
+  }, [field.label]);
+
+  // Handle label save
+  const handleLabelSave = useCallback(() => {
+    if (localLabel !== field.label) {
+      onUpdate(field.id, { label: localLabel });
+    }
+  }, [localLabel, field.label, field.id, onUpdate]);
+
+  // Handle label key press
+  const handleLabelKeyPress = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  }, []);
+
+  // Change field type
+  const changeFieldType = useCallback((newType) => {
+    const fieldType = FIELD_TYPES.find(ft => ft.type === newType);
+    const updates = { type: newType };
+    
+    // Add default options for select/checkbox types
+    if (['select', 'checkbox'].includes(newType) && !['select', 'checkbox'].includes(field.type)) {
+      updates.options = [{ id: 'opt1', value: 'option1', label: 'Option 1' }];
+    }
+    
+    // Add specialized options for consultancy fields
+    if (['language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(newType)) {
+      const getDefaultOptions = (fieldType) => {
+        switch (fieldType) {
+          case 'language-selection':
+            return [
+              { id: 'ielts', value: 'ielts', label: 'IELTS Preparation' },
+              { id: 'pte', value: 'pte', label: 'PTE Preparation' },
+              { id: 'german', value: 'german', label: 'German Language' },
+              { id: 'spanish', value: 'spanish', label: 'Spanish Language' }
+            ];
+          case 'proficiency-level':
+            return [
+              { id: 'beginner', value: 'beginner', label: 'Beginner (A1)' },
+              { id: 'intermediate', value: 'intermediate', label: 'Intermediate (B1)' },
+              { id: 'advanced', value: 'advanced', label: 'Advanced (C1)' }
+            ];
+          case 'education-level':
+            return [
+              { id: 'slc', value: 'slc', label: 'SLC/SEE' },
+              { id: 'plus2', value: 'plus2', label: '+2/Intermediate' },
+              { id: 'bachelor', value: 'bachelor', label: "Bachelor's Degree" }
+            ];
+          case 'time-preference':
+            return [
+              { id: 'morning', value: 'morning', label: 'Morning (6:00 AM - 10:00 AM)' },
+              { id: 'evening', value: 'evening', label: 'Evening (4:00 PM - 8:00 PM)' },
+              { id: 'weekend', value: 'weekend', label: 'Weekend Only' }
+            ];
+          default:
+            return [];
+        }
+      };
+      updates.options = getDefaultOptions(newType);
+    }
+    
+    onUpdate(field.id, updates);
+    setShowFieldTypeMenu(false);
+  }, [field.id, field.type, onUpdate]);
+
+  // Add option
+  const addOption = useCallback(() => {
+    const newOption = {
+      id: `opt_${Date.now()}`,
+      value: `option${(field.options || []).length + 1}`,
+      label: `Option ${(field.options || []).length + 1}`
+    };
+    onUpdate(field.id, { 
+      options: [...(field.options || []), newOption] 
+    });
+  }, [field.id, field.options, onUpdate]);
+
+  // Update option
+  const updateOption = useCallback((optionId, updates) => {
+    const updatedOptions = (field.options || []).map(option =>
+      option.id === optionId ? { ...option, ...updates } : option
+    );
+    onUpdate(field.id, { options: updatedOptions });
+  }, [field.id, field.options, onUpdate]);
+
+  // Delete option
+  const deleteOption = useCallback((optionId) => {
+    const updatedOptions = (field.options || []).filter(option => option.id !== optionId);
+    onUpdate(field.id, { options: updatedOptions });
+  }, [field.id, field.options, onUpdate]);
+
+  const currentFieldType = FIELD_TYPES.find(ft => ft.type === field.type);
+  const FieldIcon = currentFieldType?.icon || Type;
+
+  // Check if field has options
+  const hasOptions = ['select', 'checkbox', 'language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(field.type);
+  const isSpecialConsultancyField = ['language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(field.type);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-white border border-gray-200 rounded-lg transition-all ${
+        isActive ? 'border-blue-500 shadow-md' : 'border-gray-200'
+      }`}
+      onClick={onActivate}
+    >
+      <div className="p-6">
+        {/* Question Header */}
+        <div className="flex items-start space-x-4 mb-4">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded mt-1"
+          >
+            <GripVertical className="w-5 h-5 text-gray-400" />
+          </div>
+          
+          <div className="flex-1">
+            {/* Question Label */}
+            <div className="flex items-center space-x-3 mb-4">
+              <input
+                type="text"
+                value={localLabel}
+                onChange={(e) => setLocalLabel(e.target.value)}
+                onBlur={handleLabelSave}
+                onKeyPress={handleLabelKeyPress}
+                className="flex-1 text-lg border-none outline-none bg-transparent placeholder-gray-400 focus:bg-gray-50 rounded px-2 py-1"
+                placeholder="Question"
+              />
+              
+              {/* Field Type Selector */}
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFieldTypeMenu(!showFieldTypeMenu);
+                  }}
+                  className="flex items-center space-x-2 px-3 py-2 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <FieldIcon className="w-5 h-5 text-gray-600" />
+                  <span className="text-sm text-gray-600">{currentFieldType?.label}</span>
+                </button>
+                
+                {showFieldTypeMenu && (
+                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2 min-w-64">
+                    <div className="space-y-2">
+                      {/* Basic Fields */}
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-1">Basic</div>
+                        {FIELD_TYPES.filter(ft => ft.category === 'basic').map(fieldType => {
+                          const Icon = fieldType.icon;
+                          return (
+                            <button
+                              key={fieldType.type}
+                              onClick={() => changeFieldType(fieldType.type)}
+                              className={`w-full flex items-center p-2 hover:bg-gray-50 rounded text-left ${
+                                field.type === fieldType.type ? 'bg-blue-50 text-blue-600' : ''
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mr-3" />
+                              <span className="text-sm">{fieldType.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Contact Fields */}
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-1">Contact</div>
+                        {FIELD_TYPES.filter(ft => ft.category === 'contact').map(fieldType => {
+                          const Icon = fieldType.icon;
+                          return (
+                            <button
+                              key={fieldType.type}
+                              onClick={() => changeFieldType(fieldType.type)}
+                              className={`w-full flex items-center p-2 hover:bg-gray-50 rounded text-left ${
+                                field.type === fieldType.type ? 'bg-blue-50 text-blue-600' : ''
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mr-3" />
+                              <span className="text-sm">{fieldType.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Consultancy Fields */}
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-1">Consultancy</div>
+                        {FIELD_TYPES.filter(ft => ft.category === 'consultancy').map(fieldType => {
+                          const Icon = fieldType.icon;
+                          return (
+                            <button
+                              key={fieldType.type}
+                              onClick={() => changeFieldType(fieldType.type)}
+                              className={`w-full flex items-center p-2 hover:bg-gray-50 rounded text-left ${
+                                field.type === fieldType.type ? 'bg-blue-50 text-blue-600' : ''
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mr-3" />
+                              <span className="text-sm">{fieldType.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Choice Fields */}
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-1">Choices</div>
+                        {FIELD_TYPES.filter(ft => ft.category === 'choice').map(fieldType => {
+                          const Icon = fieldType.icon;
+                          return (
+                            <button
+                              key={fieldType.type}
+                              onClick={() => changeFieldType(fieldType.type)}
+                              className={`w-full flex items-center p-2 hover:bg-gray-50 rounded text-left ${
+                                field.type === fieldType.type ? 'bg-blue-50 text-blue-600' : ''
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mr-3" />
+                              <span className="text-sm">{fieldType.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Document Fields */}
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-1">Documents</div>
+                        {FIELD_TYPES.filter(ft => ft.category === 'documents').map(fieldType => {
+                          const Icon = fieldType.icon;
+                          return (
+                            <button
+                              key={fieldType.type}
+                              onClick={() => changeFieldType(fieldType.type)}
+                              className={`w-full flex items-center p-2 hover:bg-gray-50 rounded text-left ${
+                                field.type === fieldType.type ? 'bg-blue-50 text-blue-600' : ''
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mr-3" />
+                              <span className="text-sm">{fieldType.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Field Content */}
+            <div className="space-y-3">
+              <FieldContent
+                field={field}
+                onUpdate={onUpdate}
+                addOption={addOption}
+                updateOption={updateOption}
+                deleteOption={deleteOption}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Field Actions */}
+        {isActive && (
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(field.id);
+                }}
+                className="flex items-center px-3 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                <span className="text-sm">Delete</span>
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Required</span>
+                <input
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={(e) => onUpdate(field.id, { required: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Field Content Component
+const FieldContent = ({ field, onUpdate, addOption, updateOption, deleteOption }) => {
+  const renderFieldInput = () => {
+    switch (field.type) {
+      case 'textarea':
+        return (
+          <textarea
+            placeholder={field.placeholder || 'Long answer text'}
+            className="w-full px-0 py-2 border-none outline-none bg-transparent resize-none border-b border-gray-300 focus:border-blue-500 transition-colors"
+            rows={3}
+            disabled
+          />
+        );
+        
+      case 'select':
+      case 'checkbox':
+      case 'language-selection':
+      case 'proficiency-level':
+      case 'education-level':
+      case 'time-preference':
+        const isReadOnly = ['language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(field.type);
+        
+        return (
+          <div className="space-y-2">
+            {(field.options || []).map((option, index) => (
+              <div key={option.id} className="flex items-center space-x-3">
+                <div className="flex items-center">
+                  {['select', 'language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(field.type) ? (
+                    <div className="w-4 h-4 border-2 border-gray-400 rounded-full"></div>
+                  ) : (
+                    <div className="w-4 h-4 border-2 border-gray-400 rounded"></div>
+                  )}
+                </div>
+                
+                <input
+                  type="text"
+                  value={option.label}
+                  onChange={(e) => updateOption(option.id, { label: e.target.value, value: e.target.value.toLowerCase() })}
+                  className={`flex-1 px-2 py-1 border-none outline-none bg-transparent focus:bg-gray-50 rounded ${isReadOnly ? 'text-gray-600' : ''}`}
+                  placeholder={`Option ${index + 1}`}
+                  readOnly={isReadOnly}
+                />
+                
+                {!isReadOnly && (field.options || []).length > 1 && (
                   <button
-                    onClick={() => deleteOption(field.id, index)}
-                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                    onClick={() => deleteOption(option.id)}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                )}
+              </div>
+            ))}
+            
+            {!isReadOnly && (
+              <button
+                onClick={addOption}
+                className="flex items-center space-x-2 text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <div className="flex items-center">
+                  {['select', 'language-selection', 'proficiency-level', 'education-level', 'time-preference'].includes(field.type) ? (
+                    <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
+                  ) : (
+                    <div className="w-4 h-4 border-2 border-gray-300 rounded"></div>
+                  )}
                 </div>
-              ))}
+                <span className="text-sm">Add option</span>
+              </button>
+            )}
+          </div>
+        );
+        
+      case 'date':
+        return (
+          <div className="flex items-center space-x-2 py-2 border-b border-gray-300">
+            <Calendar className="w-5 h-5 text-gray-400" />
+            <span className="text-gray-500">Date</span>
+          </div>
+        );
+        
+      case 'file':
+        return (
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <Image className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-600 font-medium mb-1">File Upload Area</p>
+              <p className="text-sm text-gray-500">Users will be able to upload files here</p>
+            </div>
+            
+            {/* File Upload Configuration */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <h4 className="text-sm font-medium text-gray-700">📁 Upload Settings</h4>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">File Type Purpose</label>
+                <select
+                  value={field.uploadPurpose || 'documents'}
+                  onChange={(e) => onUpdate(field.id, { uploadPurpose: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="documents">📄 Documents (PDF, DOC, DOCX)</option>
+                  <option value="photos">📸 Photos/ID (PNG, JPG, JPEG)</option>
+                  <option value="certificates">🎓 Certificates (PDF, JPG, PNG)</option>
+                  <option value="transcripts">📜 Academic Transcripts (PDF)</option>
+                  <option value="cv">📝 CV/Resume (PDF, DOC, DOCX)</option>
+                  <option value="passport">🛂 Passport/ID (JPG, PNG, PDF)</option>
+                  <option value="test-scores">📊 Test Scores (PDF, JPG, PNG)</option>
+                  <option value="any">📁 Any Document Type</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Maximum File Size</label>
+                <select
+                  value={field.maxSize || '10'}
+                  onChange={(e) => onUpdate(field.id, { maxSize: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="2">2 MB (Small files)</option>
+                  <option value="5">5 MB (Standard)</option>
+                  <option value="10">10 MB (Large files)</option>
+                  <option value="20">20 MB (Very large)</option>
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id={`multiple-${field.id}`}
+                    checked={field.allowMultiple || false}
+                    onChange={(e) => onUpdate(field.id, { allowMultiple: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor={`multiple-${field.id}`} className="text-xs text-gray-600">
+                    Multiple files
+                  </label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id={`preview-${field.id}`}
+                    checked={field.showPreview || false}
+                    onChange={(e) => onUpdate(field.id, { showPreview: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor={`preview-${field.id}`} className="text-xs text-gray-600">
+                    Show preview
+                  </label>
+                </div>
+              </div>
+              
+              {/* Upload Instructions */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Instructions for Users (optional)</label>
+                <textarea
+                  value={field.uploadInstructions || ''}
+                  onChange={(e) => onUpdate(field.id, { uploadInstructions: e.target.value })}
+                  placeholder="e.g., Please upload a clear, high-quality scan of your certificate..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
             </div>
           </div>
-        )}
-
-        {/* Validation settings for text fields */}
-        {['text', 'textarea', 'email'].includes(field.type) && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Min Length
-              </label>
-              <input
-                type="number"
-                value={field.validation?.minLength || ''}
-                onChange={(e) => handleValidationUpdate('minLength', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="No limit"
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Max Length
-              </label>
-              <input
-                type="number"
-                value={field.validation?.maxLength || ''}
-                onChange={(e) => handleValidationUpdate('maxLength', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="No limit"
-                min="1"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Preview of field */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm font-medium text-blue-900 mb-2">Preview:</p>
-          <FieldPreview field={field} />
-        </div>
-      </div>
-    );
-  });
-
-  // Field Preview Component
-  const FieldPreview = ({ field }) => {
-    const renderPreview = () => {
-      switch (field.type) {
-        case 'textarea':
-          return (
-            <textarea
-              placeholder={field.placeholder}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
-              rows={3}
-              disabled
-            />
-          );
-        case 'select':
-          return (
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" disabled>
-              <option>Select an option...</option>
-              {field.options?.map((option, index) => (
-                <option key={index}>{option.label}</option>
-              ))}
-            </select>
-          );
-        case 'radio':
-          return (
-            <div className="space-y-2">
-              {field.options?.map((option, index) => (
-                <label key={index} className="flex items-center space-x-2">
-                  <input type="radio" disabled className="text-blue-600" />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
-          );
-        case 'checkbox':
-          return (
-            <div className="space-y-2">
-              {field.options?.map((option, index) => (
-                <label key={index} className="flex items-center space-x-2">
-                  <input type="checkbox" disabled className="text-blue-600" />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
-          );
-        case 'date':
-          return (
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
-              disabled
-            />
-          );
-        case 'file':
-          return (
-            <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center">
-              <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-600">Click to upload or drag and drop</p>
-            </div>
-          );
-        case 'rating':
-          return (
-            <div className="flex space-x-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} className="w-6 h-6 text-gray-300" />
-              ))}
-            </div>
-          );
-        default:
-          return (
-            <input
-              type={field.type}
-              placeholder={field.placeholder}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
-              disabled
-            />
-          );
-      }
-    };
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {field.label} {field.required && <span className="text-red-500">*</span>}
-        </label>
-        {renderPreview()}
-        {field.helpText && (
-          <p className="text-xs text-gray-500 mt-1">{field.helpText}</p>
-        )}
-      </div>
-    );
+        );
+        
+      default:
+        return (
+          <input
+            type={field.type}
+            placeholder={field.placeholder || 'Short answer text'}
+            className="w-full px-0 py-2 border-none outline-none bg-transparent border-b border-gray-300 focus:border-blue-500 transition-colors"
+            disabled
+          />
+        );
+    }
   };
 
-  // Memoize field IDs for drag and drop
-  const fieldIds = useMemo(() => fields.map(field => field.id), [fields]);
-
-  // Main render content
-  const fieldsContent = (
-    <div className="space-y-4">
-      {fields.map((field, index) => (
-        <SortableField key={field.id} field={field} index={index} />
-      ))}
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Field Type Selector */}
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Field</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {FIELD_TYPES.map(fieldType => {
-            const Icon = fieldType.icon;
-            return (
-              <button
-                key={fieldType.value}
-                onClick={() => addField(fieldType.value)}
-                className="flex flex-col items-center p-3 border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group text-left"
-                title={fieldType.description}
-              >
-                <Icon className="w-6 h-6 mb-2 text-gray-600 group-hover:text-blue-600" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700 text-center">
-                  {fieldType.label}
-                </span>
-                <span className="text-xs text-gray-500 mt-1 text-center">
-                  {fieldType.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Fields List */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Form Fields</h3>
-          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-            {fields.length} field{fields.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        
-        {fields.length === 0 ? (
-          <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-            <p className="text-gray-500 font-medium">No fields added yet</p>
-            <p className="text-gray-400 text-sm mb-4">Add fields using the buttons above to get started</p>
-            <p className="text-sm text-blue-600">
-              💡 Tip: For student applications, consider adding fields like Name, Email, Phone, Education Level, and Language Level
-            </p>
-          </div>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={fieldIds} strategy={verticalListSortingStrategy}>
-              {fieldsContent}
-            </SortableContext>
-          </DndContext>
-        )}
+    <div>
+      {renderFieldInput()}
+      
+      {/* Help Text */}
+      <div className="mt-2">
+        <input
+          type="text"
+          value={field.helpText || ''}
+          onChange={(e) => onUpdate(field.id, { helpText: e.target.value })}
+          placeholder="Help text (optional)"
+          className="w-full px-0 py-1 text-sm border-none outline-none bg-transparent text-gray-600 placeholder-gray-400 focus:bg-gray-50 rounded"
+        />
       </div>
     </div>
   );
