@@ -10,7 +10,10 @@ import {
   BookOpen,
   Globe,
   Settings,
-  Menu
+  Menu,
+  MessageSquare,
+  GraduationCap,
+  FileText
 } from 'lucide-react';
 
 const Logo = () => (
@@ -21,17 +24,18 @@ const Logo = () => (
 
 const navItems = [
   { label: 'Dashboard', to: '/admin/dashboard', icon: Home },
-  { label: 'Users',     to: '/admin/users',     icon: Users },
-  { label: 'Staff',     to: '/admin/staff',     icon: Users },        // ← NEW
-  { label: 'Tutors',    to: '/admin/tutors',    icon: UserCheck },
-  { label: 'Admins',    to: '/admin/admins',    icon: Shield },
-  { label: 'Revenue',   to: '/admin/revenue',   icon: DollarSign },
-  { label: 'Enrollment',to: '/admin/enrollment',icon: ClipboardList },
-  { label: 'Classes',   to: '/admin/classes',   icon: BookOpen },
+  { label: 'Users', to: '/admin/users', icon: Users },
+  { label: 'Staff', to: '/admin/staff', icon: GraduationCap },
+  { label: 'Admins', to: '/admin/admins', icon: Shield },
+  { label: 'Sections', to: '/admin/sections', icon: FileText },
+  { label: 'Classes', to: '/admin/classes', icon: BookOpen },
   { label: 'Languages', to: '/admin/languages', icon: Globe },
-  { label: 'Settings',  to: '/admin/settings',  icon: Settings },
-  { label: 'Sections',  to: '/admin/sections',  icon: Settings },
+  { label: 'Enrollment', to: '/admin/enrollment', icon: ClipboardList },
+  { label: 'Revenue', to: '/admin/revenue', icon: DollarSign },
+  { label: 'Enquiries', to: '/admin/enquiries', icon: MessageSquare },
+  { label: 'Forms', to: '/admin/forms', icon: MessageSquare },
 
+  { label: 'Settings', to: '/admin/settings', icon: Settings },
 ];
 
 export default function Sidebar() {

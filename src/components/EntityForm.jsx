@@ -1,5 +1,5 @@
 // src/components/DynamicEntityForm.jsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import api from "../api/axios"
 import DatePicker from "react-datepicker"
@@ -30,91 +30,124 @@ export default function DynamicEntityForm({
   // Watch all fields for computed value dependencies
   const watchedValues = watch()
 
-  // Fetch options for dynamic fields
-  useEffect(() => {
-    const fetchOptions = async () => {
-      setLoading(true)
-      // Get baseURL from axios instance
-      const baseURL = api.defaults.baseURL || ''
-      const promises = schema
-        .filter(field => field.type === 'select-fetch' || field.type === 'multiselect-fetch')
-        .map(async field => {
-          try {
-            let endpoint = field.fetchEndpoint || apiEndpoints[field.fetchKey]
-            if (!endpoint) return null
+  // Memoize select-fetch fields to prevent unnecessary re-computation
+  const selectFetchFields = useMemo(() => {
+    return schema.filter(field => field.type === 'select-fetch' || field.type === 'multiselect-fetch')
+  }, [schema])
 
-            // Prepend baseURL if endpoint is relative
-            if (endpoint.startsWith('/')) {
-              endpoint = baseURL.replace(/\/$/, '') + endpoint
+  // Memoize API endpoints to prevent unnecessary re-fetching
+  const stableApiEndpoints = useMemo(() => apiEndpoints, [JSON.stringify(apiEndpoints)])
+
+  // Fetch options for dynamic fields with proper dependency management
+  const fetchOptions = useCallback(async (fields) => {
+    if (fields.length === 0) return
+
+    // Check if we already have all the options
+    const fieldsNeedingFetch = fields.filter(field => 
+      !fetchedOptions[field.name] || fetchedOptions[field.name].length === 0
+    )
+    
+    if (fieldsNeedingFetch.length === 0) return
+
+    setLoading(true)
+    
+    try {
+      const promises = fieldsNeedingFetch.map(async field => {
+        try {
+          let endpoint = field.fetchEndpoint || stableApiEndpoints[field.fetchKey]
+          if (!endpoint) return { [field.name]: [] }
+
+          const response = await api.get(endpoint)
+          
+          // Handle different response structures
+          let items = []
+          if (response.data && response.data.success) {
+            const responseData = response.data.data
+            if (Array.isArray(responseData)) {
+              items = responseData
+            } else if (responseData && typeof responseData === 'object') {
+              const possibleArrays = Object.values(responseData).filter(Array.isArray)
+              items = possibleArrays.length > 0 ? possibleArrays[0] : []
             }
-
-            const response = await fetch(endpoint)
-            const data = await response.json()
-            // FIX: handle { data: [...] } API response
-            const items = Array.isArray(data)
-              ? data
-              : Array.isArray(data.data)
-                ? data.data
-                : []
-
-            // Transform data based on field config
-            const options = field.transformOptions 
-              ? field.transformOptions(items)
-              : items.map(item => ({
-                  value: item[field.valueKey || 'id'] || item.id,
-                  label: item[field.labelKey || 'name'] || item.name
-                }))
-            
-            return { [field.name]: options }
-          } catch (error) {
-            console.error(`Error fetching options for ${field.name}:`, error)
-            return { [field.name]: [] }
+          } else if (Array.isArray(response.data)) {
+            items = response.data
+          } else if (response.data && Array.isArray(response.data.data)) {
+            items = response.data.data
           }
-        })
+
+          const options = field.transformOptions 
+            ? field.transformOptions(items)
+            : items.map(item => ({
+                value: item[field.valueKey || '_id'] || item.id || item._id,
+                label: item[field.labelKey || 'name'] || item.name || item.label
+              }))
+          
+          return { [field.name]: options }
+        } catch (error) {
+          console.error(`Error fetching options for ${field.name}:`, error)
+          return { [field.name]: [] }
+        }
+      })
 
       const results = await Promise.all(promises)
       const newFetchedOptions = results.reduce((acc, result) => ({ ...acc, ...result }), {})
-      setFetchedOptions(newFetchedOptions)
+      
+      setFetchedOptions(prev => ({ ...prev, ...newFetchedOptions }))
+    } catch (error) {
+      console.error('Error in fetchOptions:', error)
+    } finally {
       setLoading(false)
     }
+  }, [fetchedOptions, stableApiEndpoints])
 
-    fetchOptions()
-  }, [schema, apiEndpoints])
-
-  // Handle computed values
+  // Effect for fetching options - only runs when selectFetchFields change
   useEffect(() => {
-    schema.forEach(field => {
+    fetchOptions(selectFetchFields)
+  }, [fetchOptions, selectFetchFields])
+
+  // Memoize computed fields to prevent recreation
+  const computedFieldsMap = useMemo(() => {
+    return schema.reduce((acc, field) => {
       if (field.computed && field.computeFrom) {
-        const dependencies = Array.isArray(field.computeFrom) ? field.computeFrom : [field.computeFrom]
-        const hasAllDependencies = dependencies.every(dep => watchedValues[dep] !== undefined && watchedValues[dep] !== '')
+        acc[field.name] = field
+      }
+      return acc
+    }, {})
+  }, [schema])
+
+  // Handle computed values with proper dependencies
+  useEffect(() => {
+    Object.values(computedFieldsMap).forEach(field => {
+      const dependencies = Array.isArray(field.computeFrom) ? field.computeFrom : [field.computeFrom]
+      const hasAllDependencies = dependencies.every(dep => watchedValues[dep] !== undefined && watchedValues[dep] !== '')
+      
+      if (hasAllDependencies) {
+        let computedValue
         
-        if (hasAllDependencies) {
-          let computedValue
-          
-          if (field.computeFunction) {
-            // Custom compute function
-            computedValue = field.computeFunction(watchedValues, getValues())
-          } else if (field.computeTemplate) {
-            // Template-based computation (e.g., "https://flagcdn.com/w80/{code}.png")
-            computedValue = field.computeTemplate.replace(/\{(\w+)\}/g, (match, key) => watchedValues[key] || '')
-          } else if (field.computeConcat) {
-            // Concatenation with separator
-            computedValue = dependencies
-              .map(dep => watchedValues[dep])
-              .filter(Boolean)
-              .join(field.computeConcat.separator || '')
-          }
-          
-          if (computedValue && computedValue !== watchedValues[field.name]) {
-            setValue(field.name, computedValue)
-            setComputedValues(prev => ({ ...prev, [field.name]: computedValue }))
-          }
+        if (field.computeFunction) {
+          // Custom compute function
+          computedValue = field.computeFunction(watchedValues, getValues())
+        } else if (field.computeTemplate) {
+          // Template-based computation (e.g., "https://flagcdn.com/w80/{code}.png")
+          computedValue = field.computeTemplate.replace(/\{(\w+)\}/g, (match, key) => watchedValues[key] || '')
+        } else if (field.computeConcat) {
+          // Concatenation with separator
+          computedValue = dependencies
+            .map(dep => watchedValues[dep])
+            .filter(Boolean)
+            .join(field.computeConcat.separator || '')
+        }
+        
+        if (computedValue && computedValue !== watchedValues[field.name]) {
+          setValue(field.name, computedValue)
+          setComputedValues(prev => ({ ...prev, [field.name]: computedValue }))
         }
       }
     })
-  }, [watchedValues, schema, setValue, getValues])
+  }, [watchedValues, computedFieldsMap, setValue, getValues])
 
-  const renderField = (field) => {
+  // Memoized field renderer to prevent unnecessary re-renders
+  const renderField = useCallback((field) => {
     const { name, label, type, rules = {}, options = [], placeholder, help } = field
     const error = errors[name]?.message
     const isComputed = field.computed && computedValues[name]
@@ -150,14 +183,20 @@ export default function DynamicEntityForm({
       case 'select-fetch':
       case 'multiselect-fetch':
         const fetchedOpts = fetchedOptions[name] || []
+        const isFieldLoading = loading && fetchedOpts.length === 0
+        
         return (
           <select
             {...register(name, rules)}
             multiple={type === 'multiselect-fetch'}
             className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            disabled={loading || isComputed}
+            disabled={isFieldLoading || isComputed}
           >
-            {type === 'select-fetch' && <option value="">{loading ? 'Loading…' : (placeholder || 'Select…')}</option>}
+            {type === 'select-fetch' && (
+              <option value="">
+                {isFieldLoading ? 'Loading…' : (placeholder || 'Select…')}
+              </option>
+            )}
             {fetchedOpts.map(o => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -356,8 +395,7 @@ export default function DynamicEntityForm({
                         alt="Preview"
                         className="h-16 w-16 object-cover rounded border"
                         onError={e => {
-                          e.currentTarget.style.display = 'none';
-                          setPreview(null);
+                          e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCA2NCA2NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMzIgNGMxNS40NjQgMCAyOCAxMi41MzYgMjggMjhzLTEyLjUzNiAyOC0yOCAyOFM0IDQ3LjQ2NCA0IDMyIDQgMTYuNTM2IDMyIDR6IiBmaWxsPSIjZjNmNGY2Ii8+PHBhdGggZD0iTTIyIDI0aDIwdjE2SDIyVjI0eiIgZmlsbD0iI2U1ZTdlYiIvPjxwYXRoIGQ9Im0yNiAzMCA2LTZoOGwtNCA0djZoLTEweiIgZmlsbD0iI2Q1ZDdkYyIvPjwvc3ZnPg==';
                         }}
                       />
                     </div>
@@ -461,6 +499,37 @@ export default function DynamicEntityForm({
           />
         )
 
+      case 'datetime-local':
+        return (
+          <Controller
+            name={name}
+            control={control}
+            rules={rules}
+            render={({ field: { onChange, value } }) => (
+              <DatePicker
+                selected={value ? new Date(value) : null}
+                onChange={(date) => {
+                  if (date) {
+                    onChange(date.toISOString());
+                  } else {
+                    onChange(null);
+                  }
+                }}
+                showTimeSelect
+                timeIntervals={15}
+                dateFormat="yyyy-MM-dd HH:mm"
+                minDate={new Date()}
+                placeholderText={placeholder || "Select date and time"}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={isComputed}
+                isClearable
+                popperClassName="react-datepicker-popper"
+                calendarClassName="react-datepicker-calendar"
+              />
+            )}
+          />
+        )
+
       case 'time-range':
         // expects value: { start: Date, end: Date }
         return (
@@ -522,74 +591,59 @@ export default function DynamicEntityForm({
           />
         )
     }
-  }
+  }, [register, control, errors, computedValues, fetchedOptions, loading, watchedValues])
 
-  const onFormSubmit = (data) => {
-    // Transform data before submission if needed
+  // Memoized form submission handler
+  const onFormSubmit = useCallback((data) => {
+    // Transform file inputs back for submission
     const transformedData = { ...data }
     
     schema.forEach(field => {
-      if (field.transform && transformedData[field.name] !== undefined) {
-        transformedData[field.name] = field.transform(transformedData[field.name], transformedData)
+      if (field.type === 'file-or-url' && transformedData[field.name]) {
+        // Keep as-is: File objects or URL strings will be handled by the parent
       }
     })
-
+    
     onSubmit(transformedData)
-  }
+  }, [onSubmit, schema])
 
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
-      {schema.map(field => {
-        const error = errors[field.name]?.message
-        const isComputed = field.computed && computedValues[field.name]
-
-        return (
-          <div key={field.name} className={field.className}>
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {field.label}
-                {field.required && <span className="text-red-500 ml-1">*</span>}
-              </label>
-              {isComputed && (
-                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                  Auto-computed
-                </span>
-              )}
-            </div>
-            
-            {renderField(field)}
-            
-            {field.help && (
-              <p className="text-xs text-gray-500 mt-1">{field.help}</p>
-            )}
-            
-            {error && (
-              <p className="text-red-500 text-sm mt-1 flex items-center">
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {error}
-              </p>
-            )}
-          </div>
-        )
-      })}
-
-      {/* Sticky button row */}
-      <div className="flex justify-end space-x-3 pt-6 border-t bg-white sticky bottom-0 left-0 z-10">
-        <button
-          type="button"
-          onClick={() => onCancel ? onCancel() : window.history.back()}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          Cancel
-        </button>
+      {schema.map((field) => (
+        <div key={field.name}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {field.label}
+            {field.rules?.required && <span className="text-red-500 ml-1">*</span>}
+          </label>
+          
+          {renderField(field)}
+          
+          {errors[field.name] && (
+            <p className="mt-1 text-sm text-red-600">{errors[field.name].message}</p>
+          )}
+          
+          {field.help && (
+            <p className="mt-1 text-xs text-gray-500">{field.help}</p>
+          )}
+        </div>
+      ))}
+      
+      <div className="flex items-center justify-end space-x-3 pt-6 border-t">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Cancel
+          </button>
+        )}
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Saving…' : 'Save'}
+          {loading ? 'Processing...' : 'Submit'}
         </button>
       </div>
     </form>

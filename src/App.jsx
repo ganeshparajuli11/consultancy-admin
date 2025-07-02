@@ -20,6 +20,8 @@ import NotFound from './pages/NotFound'
 import Language from './features/languages/Language'
 import StaffManagement from './features/admin/dashboard/StaffManagement'
 import Section  from './features/sections/Sections'
+import Enquiries from './features/enquiries/Enquiries'
+import AppliedStudents from './features/enquiries/AppliedStudents'
 
 /**
  * SessionLoader runs inside Router context and handles
@@ -76,6 +78,10 @@ function App() {
           <Route path="languages" element={<Language  />} />
           <Route path="Staff" element={<StaffManagement  />} />
           <Route path="Sections" element={<Section  />} />
+          <Route path="Enquiries" element={<Enquiries  />} />
+          <Route path="Forms" element={<AppliedStudents  />} />
+
+
 
 
           { /* everything else under /admin/* is a 404 */ }
