@@ -332,8 +332,8 @@ class ApiService {
    * Generate form URL for sharing
    */
   generateFormUrl(formData) {
-    // Use production URL for langzy.co, fallback to localhost for development
-    const frontendUrl = import.meta.env.VITE_FRONTEND_URL || 'https://langzy.co';
+    // Use environment variable for frontend URL, fallback to localhost:5173 for development
+    const frontendUrl = import.meta.env.VITE_FRONTEND_URL || 'http://localhost:5174';
     
     // Use slug if available (better for SEO), otherwise use ID
     const identifier = formData.slug || formData._id || formData.id || formData;

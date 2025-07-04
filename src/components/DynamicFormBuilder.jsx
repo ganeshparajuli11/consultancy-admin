@@ -361,7 +361,7 @@ const DynamicFormBuilder = ({ initialFields = [], onChange, onBack }) => {
         fields: formDataToSave.fields,
         category: formDataToSave.category || 'general',
         language: formDataToSave.language,
-        isActive: true
+        isActive: formDataToSave.isActive
       };
 
       let response;
@@ -584,25 +584,44 @@ const DynamicFormBuilder = ({ initialFields = [], onChange, onBack }) => {
         {/* Form Title/Description for other steps */}
         {currentStep !== 'setup' && (
           <div className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-2">
-                <span className="text-lg">📝</span>
-                <span className="text-sm font-medium text-gray-600">Form Title & Info</span>
+            <div className="bg-gray-50 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:space-x-6">
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="text-lg">📝</span>
+                  <span className="text-sm font-medium text-gray-600">Form Title & Info</span>
+                </div>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => updateFormData({ title: e.target.value })}
+                  placeholder="Form Title"
+                  className="text-xl font-bold border-none outline-none bg-transparent placeholder-gray-400 w-full mb-2 text-gray-900"
+                />
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => updateFormData({ description: e.target.value })}
+                  placeholder="Add a description (optional)"
+                  className="text-gray-600 border-none outline-none bg-transparent placeholder-gray-400 w-full"
+                />
               </div>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => updateFormData({ title: e.target.value })}
-                placeholder="Form Title"
-                className="text-xl font-bold border-none outline-none bg-transparent placeholder-gray-400 w-full mb-2 text-gray-900"
-              />
-              <input
-                type="text"
-                value={formData.description}
-                onChange={(e) => updateFormData({ description: e.target.value })}
-                placeholder="Add a description (optional)"
-                className="text-gray-600 border-none outline-none bg-transparent placeholder-gray-400 w-full"
-              />
+              {/* Active/Inactive Toggle */}
+              <div className="flex items-center mt-4 md:mt-0">
+                <label htmlFor="isActive-toggle" className="mr-3 text-sm font-medium text-gray-700">Status:</label>
+                <button
+                  id="isActive-toggle"
+                  type="button"
+                  onClick={() => updateFormData({ isActive: !formData.isActive })}
+                  className={`relative inline-flex items-center h-6 rounded-full w-12 transition-colors focus:outline-none ${formData.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                  aria-pressed={formData.isActive}
+                >
+                  <span className="sr-only">Toggle Active</span>
+                  <span
+                    className={`inline-block w-6 h-6 transform bg-white rounded-full shadow transition-transform ${formData.isActive ? 'translate-x-6' : 'translate-x-0'}`}
+                  />
+                </button>
+                <span className={`ml-3 text-sm font-semibold ${formData.isActive ? 'text-green-700' : 'text-gray-500'}`}>{formData.isActive ? 'Active' : 'Inactive'}</span>
+              </div>
             </div>
           </div>
         )}
@@ -780,12 +799,12 @@ const DynamicFormBuilder = ({ initialFields = [], onChange, onBack }) => {
               <div className="flex items-center space-x-3">
                 <input
                   type="text"
-                  value={formData.formUrl}
+                  value={apiService.generateFormUrl(formData)}
                   readOnly
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700 text-sm"
                 />
                 <button
-                  onClick={() => navigator.clipboard.writeText(formData.formUrl)}
+                  onClick={() => navigator.clipboard.writeText(apiService.generateFormUrl(formData))}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
                 >
                   Copy
@@ -809,7 +828,7 @@ const DynamicFormBuilder = ({ initialFields = [], onChange, onBack }) => {
                 Export Responses
               </button>
               <button
-                onClick={() => window.open(formData.formUrl, '_blank')}
+                onClick={() => window.open(apiService.generateFormUrl(formData), '_blank')}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 <Share className="w-4 h-4 mr-2" />

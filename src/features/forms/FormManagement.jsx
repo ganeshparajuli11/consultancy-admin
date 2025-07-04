@@ -36,6 +36,7 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import DynamicFormBuilder from '../../components/DynamicFormBuilder';
 import api from '../../api/axios';
+import apiService from '../../services/api';
 
 const FormManagement = () => {
   const [currentView, setCurrentView] = useState('list'); // 'list', 'create', 'edit', 'submissions'
@@ -317,7 +318,7 @@ const FormManagement = () => {
     const loadingToastId = showLoadingToast('Generating QR code...');
     try {
       const QRCode = (await import('qrcode')).default;
-      const publicFormUrl = `http://localhost:5173/forms/${formSlug}`;
+      const publicFormUrl = apiService.generateFormUrl({ slug: formSlug });
       const qrDataUrl = await QRCode.toDataURL(publicFormUrl, {
         width: 256,
         margin: 2,
@@ -340,7 +341,7 @@ const FormManagement = () => {
   }, [showSuccessToast, showErrorToast, showLoadingToast]);
 
   const copyFormLink = useCallback(async (formSlug) => {
-    const publicFormUrl = `http://localhost:5173/forms/${formSlug}`;
+    const publicFormUrl = apiService.generateFormUrl({ slug: formSlug });
     try {
       await navigator.clipboard.writeText(publicFormUrl);
       showSuccessToast('🔗 Form link copied to clipboard!');
@@ -422,6 +423,32 @@ const FormManagement = () => {
   const clearFilters = useCallback(() => {
     setFilters({ search: '', category: '', language: '', isActive: '' });
   }, []);
+
+  // Toggle form active status
+  const handleToggleFormStatus = useCallback(async (formId, currentStatus) => {
+    const newStatus = !currentStatus;
+    const loadingToastId = showLoadingToast(`${newStatus ? 'Activating' : 'Deactivating'} form...`);
+    try {
+      const response = await api.put(`/api/forms/${formId}`, { 
+        isActive: newStatus 
+      });
+      if (response.data.success) {
+        toast.dismiss(loadingToastId);
+        showSuccessToast(`✅ Form ${newStatus ? 'activated' : 'deactivated'} successfully!`);
+        // Update the local state immediately for better UX
+        setForms(prevForms => 
+          prevForms.map(form => 
+            form._id === formId ? { ...form, isActive: newStatus } : form
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling form status:', error);
+      toast.dismiss(loadingToastId);
+      const errorMessage = error.response?.data?.message || 'Failed to update form status. Please try again.';
+      showErrorToast(errorMessage);
+    }
+  }, [showSuccessToast, showErrorToast, showLoadingToast]);
 
   // Detailed Submission View Modal Component
   const SubmissionDetailModal = ({ submission, onClose }) => {
@@ -945,13 +972,106 @@ const FormManagement = () => {
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search forms..."
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({...prev, search: e.target.value}))}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <select
+            value={filters.isActive}
+            onChange={(e) => setFilters(prev => ({...prev, isActive: e.target.value}))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Forms</option>
+            <option value="true">Active Forms</option>
+            <option value="false">Inactive Forms</option>
+          </select>
+
+          <select
+            value={filters.category}
+            onChange={(e) => setFilters(prev => ({...prev, category: e.target.value}))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Categories</option>
+            <option value="language-course">Language Course</option>
+            <option value="test-preparation">Test Preparation</option>
+            <option value="consultation">Consultation</option>
+            <option value="general">General</option>
+          </select>
+
+          <select
+            value={filters.language}
+            onChange={(e) => setFilters(prev => ({...prev, language: e.target.value}))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Languages</option>
+            {languages.map((language) => (
+              <option key={language._id} value={language._id}>
+                {language.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        {/* Quick Stats */}
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center space-x-6 text-sm text-gray-600">
+            <span>Total Forms: <strong>{forms.length}</strong></span>
+            <span>Active: <strong>{forms.filter(f => f.isActive).length}</strong></span>
+            <span>Inactive: <strong>{forms.filter(f => !f.isActive).length}</strong></span>
+            <span>Total Submissions: <strong>{forms.reduce((sum, f) => sum + (f.submissions || 0), 0)}</strong></span>
+          </div>
+          
+          {(filters.search || filters.isActive || filters.category || filters.language) && (
+            <button
+              onClick={() => setFilters({ search: '', category: '', language: '', isActive: '' })}
+              className="flex items-center text-gray-500 hover:text-gray-700 text-sm"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Clear Filters
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Forms Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredForms.map((form) => (
           <div key={form._id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            {/* Header with Toggle */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{form.name}</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">{form.name}</h3>
+                  {/* Active/Inactive Toggle Switch */}
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs font-medium ${form.isActive ? 'text-green-600' : 'text-gray-500'}`}>
+                      {form.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <button
+                      onClick={() => handleToggleFormStatus(form._id, form.isActive)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        form.isActive ? 'bg-green-600' : 'bg-gray-200'
+                      }`}
+                      title={`Click to ${form.isActive ? 'deactivate' : 'activate'} form`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          form.isActive ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
                 <p className="text-sm text-gray-600 mb-3 line-clamp-2">{form.description || 'No description'}</p>
                 
                 <div className="flex items-center space-x-4 text-xs text-gray-500 mb-4">
@@ -965,38 +1085,40 @@ const FormManagement = () => {
                   </span>
                 </div>
 
-                {/* Status and Language */}
-                <div className="flex items-center space-x-2 mb-4">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    form.isActive 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {form.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                  {form.language && (
+                {/* Language Badge */}
+                {form.language && (
+                  <div className="mb-4">
                     <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      <Globe className="w-3 h-3 inline mr-1" />
                       {form.language.name}
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Primary Action Button */}
+            <div className="mb-4">
+              <button
+                onClick={() => {
+                  setSelectedForm(form);
+                  setCurrentView('submissions');
+                  fetchFormSubmissions(form._id);
+                }}
+                className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                  form.submissions > 0
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                }`}
+              >
+                <Eye className="w-4 h-4 inline mr-2" />
+                View Submissions ({form.submissions || 0})
+              </button>
+            </div>
+
+            {/* Secondary Actions */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
               <div className="flex space-x-2">
-                <button
-                  onClick={() => {
-                    setSelectedForm(form);
-                    setCurrentView('submissions');
-                    fetchFormSubmissions(form._id);
-                  }}
-                  className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  <Eye className="w-4 h-4 mr-1" />
-                  View ({form.submissions || 0})
-                </button>
                 <button
                   onClick={() => {
                     setEditingForm(form);
@@ -1035,7 +1157,7 @@ const FormManagement = () => {
                   <Copy className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => window.open(`http://localhost:5173/forms/${form.slug}`, '_blank')}
+                  onClick={() => window.open(apiService.generateFormUrl({ slug: form.slug }), '_blank')}
                   className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md"
                   title="View Public Form"
                 >
@@ -1128,20 +1250,69 @@ const FormManagement = () => {
   // Render submissions view
   const renderSubmissionsView = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Form Submissions</h2>
-          <p className="text-gray-600">
-            {selectedForm?.name} - {submissions.length} submissions
-          </p>
+      {/* Enhanced Header with Form Context */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-2">
+              <button
+                onClick={() => setCurrentView('list')}
+                className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Back to Forms
+              </button>
+              <span className="text-gray-300">/</span>
+              <span className="text-gray-600">Submissions</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{selectedForm?.name}</h1>
+            <div className="flex items-center space-x-6 text-sm text-gray-600">
+              <span className="flex items-center">
+                <Users className="w-4 h-4 mr-1" />
+                {submissions.length} submissions
+              </span>
+              <span className="flex items-center">
+                <Calendar className="w-4 h-4 mr-1" />
+                Created {new Date(selectedForm?.createdAt).toLocaleDateString()}
+              </span>
+              {selectedForm?.language && (
+                <span className="flex items-center">
+                  <Globe className="w-4 h-4 mr-1" />
+                  {selectedForm.language.name}
+                </span>
+              )}
+              <span className={`flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                selectedForm?.isActive 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {selectedForm?.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            {selectedForm?.description && (
+              <p className="text-gray-600 mt-2">{selectedForm.description}</p>
+            )}
+          </div>
+          
+          {/* Quick Actions */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => copyFormLink(selectedForm?.slug)}
+              className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Copy Form Link"
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy Link
+            </button>
+            <button
+              onClick={() => window.open(apiService.generateFormUrl({ slug: selectedForm?.slug }), '_blank')}
+              className="flex items-center px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              View Form
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setCurrentView('list')}
-          className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Forms
-        </button>
       </div>
 
       {/* Submission Filters */}

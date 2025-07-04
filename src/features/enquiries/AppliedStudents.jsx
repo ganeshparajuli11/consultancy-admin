@@ -33,6 +33,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import EntityForm from '../../components/EntityForm';
 import FormManagement from '../forms/FormManagement';
 import api from '../../api/axios';
+import apiService from '../../services/api';
 
 const AppliedStudents = () => {
   const [currentView, setCurrentView] = useState('applications'); // 'applications' or 'forms'
@@ -227,7 +228,7 @@ const AppliedStudents = () => {
   // Memoized QR code generation
   const generateQRCode = useCallback(async (formSlug) => {
     const loadingToastId = showLoadingToast('Generating QR code...');
-    const publicFormUrl = `http://localhost:5173/forms/${formSlug}`;
+    const publicFormUrl = apiService.generateFormUrl({ slug: formSlug });
     try {
       const QRCode = (await import('qrcode')).default;
       const qrDataUrl = await QRCode.toDataURL(publicFormUrl, {
@@ -255,7 +256,7 @@ const AppliedStudents = () => {
 
   // Memoized copy form link
   const copyFormLink = useCallback(async (formSlug) => {
-    const publicFormUrl = `http://localhost:5173/forms/${formSlug}`;
+    const publicFormUrl = apiService.generateFormUrl({ slug: formSlug });
     try {
       await navigator.clipboard.writeText(publicFormUrl);
       showSuccessToast('🔗 Form link copied to clipboard!');
@@ -1127,7 +1128,7 @@ const AppliedStudents = () => {
               {/* Actions */}
               <div className="flex space-x-3 justify-center">
                 <button
-                  onClick={() => window.open(selectedForm.publicUrl, '_blank')}
+                  onClick={() => window.open(apiService.generateFormUrl({ slug: selectedForm.slug }), '_blank')}
                   className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
@@ -1261,7 +1262,7 @@ const AppliedStudents = () => {
                         Copy
                       </button>
                       <button 
-                        onClick={() => window.open(`http://localhost:5173/forms/${form.slug}`, '_blank')}
+                        onClick={() => window.open(apiService.generateFormUrl({ slug: form.slug }), '_blank')}
                         className="text-green-600 hover:text-green-800 flex items-center text-sm"
                         title="Preview Form"
                       >
